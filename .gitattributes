@@ -1,0 +1,14 @@
+# Normalize line endings so checked-out workflows and sources keep LF
+# on Windows. Without this, embedded `set -euo pipefail` blocks in YAML
+# can break on CRLF checkouts.
+* text=auto eol=lf
+
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.html text eol=lf
+*.ts text eol=lf

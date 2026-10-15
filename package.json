@@ -1,19 +1,44 @@
 {
-  "name": "laghu.js",
+  "name": "laghu",
   "version": "1.0.0",
   "description": "Zero-build drop-in micro-framework: Light-DOM Web Components + Proxy reactivity + JSON-into-state fetch",
+  "license": "MIT",
   "type": "module",
+  "main": "dist/laghu.min.js",
+  "types": "dist/laghu.d.ts",
+  "unpkg": "dist/laghu.min.js",
+  "jsdelivr": "dist/laghu.min.js",
+  "files": [
+    "dist/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "frontend",
+    "micro-framework",
+    "zero-build",
+    "web-components",
+    "reactivity",
+    "light-dom",
+    "csp",
+    "html-first"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prosubodh/laghu.git"
+  },
+  "homepage": "https://github.com/prosubodh/laghu#readme",
   "scripts": {
     "check": "tsc --noEmit -p jsconfig.json",
     "test": "node test/run.mjs",
-    "size": "node scripts/size.mjs"
+    "size": "node scripts/size.mjs",
+    "prepublishOnly": "npm run check && npm run test && npm run size"
   },
   "devDependencies": {
-    "jsdom": "^25.0.0",
-    "typescript": "^5.6.0"
-  },
-  "dependencies": {
     "esbuild": "^0.28.2",
-    "terser": "^5.51.2"
+    "jsdom": "^25.0.0",
+    "terser": "^5.51.2",
+    "typescript": "^5.6.0"
   }
 }

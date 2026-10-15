@@ -1,0 +1,174 @@
+name: Publish
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Verify the publishable tarball without uploading"
+        type: boolean
+        default: true
+
+# Least privilege: read the repo, write only the npm registry.
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing / provenance attestation
+
+# Never let two release runs race the same version.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify Release Before Publishing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Environment
+        run: |
+          node --version
+          npm --version
+
+      # dist/ is committed for file:// and CDN use, so rebuild it here and
+      # prove it matches the sources instead of trusting a stale build.
+      - name: Rebuild dist and verify it matches the commit
+        run: |
+          npm run size
+          git diff --exit-code dist/
+
+      - name: Run Type Checks
+        run: npm run check
+
+      - name: Run Test Suite
+        run: npm test
+
+      - name: Verify version matches the release tag
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          pkg_version="$(node -p "require('./package.json').version")"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::package.json version ($pkg_version) does not match release tag ($GITHUB_REF_NAME)"
+            exit 1
+          fi
+          echo "version $pkg_version matches tag $GITHUB_REF_NAME"
+
+      - name: Inspect the publishable tarball
+        run: |
+          set -euo pipefail
+          npm pack --dry-run
+          # Prove the tarball actually carries the files the package promises,
+          # rather than trusting the files[] allowlist to be correct.
+          npm pack --json > pack.json
+          node -e '
+            const fs = require("fs");
+            let raw = fs.readFileSync("pack.json", "utf-8");
+            if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+            const meta = JSON.parse(raw)[0];
+            const files = new Set(meta.files.map((f) => f.path));
+            const required = [
+              "package.json", "README.md", "LICENSE",
+              "dist/laghu.min.js", "dist/morph.min.js", "dist/laghu.d.ts",
+              "src/laghu.js", "src/morph.js"
+            ];
+            const missing = required.filter((f) => !files.has(f));
+            if (missing.length) {
+              console.error("::error::missing from tarball: " + missing.join(", "));
+              process.exit(1);
+            }
+            console.log("tarball contains all " + required.length + " required paths");
+          '
+
+      - name: Install the packed tarball and smoke-test the API
+        run: |
+          set -euo pipefail
+          # The highest-value missing check: the published artifact must be
+          # loadable and expose the documented API, not just constructible.
+          npm pack > /dev/null
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y > /dev/null 2>&1
+          npm install "$GITHUB_WORKSPACE"/*.tgz --no-audit --no-fund
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const pkgDir = path.dirname(require.resolve("laghu/package.json"));
+            const pkg = require("laghu/package.json");
+            const sandbox = { window: {}, console, Promise, queueMicrotask, setTimeout, clearTimeout };
+            vm.createContext(sandbox);
+            vm.runInContext(fs.readFileSync(path.join(pkgDir, "dist", "laghu.min.js"), "utf8"), sandbox, "laghu");
+            vm.runInContext(fs.readFileSync(path.join(pkgDir, "dist", "morph.min.js"), "utf8"), sandbox, "morph");
+            const api = sandbox.window.Laghu;
+            if (!api) { console.error("window.Laghu missing after load"); process.exit(1); }
+            if (api.version !== pkg.version) {
+              console.error("version mismatch: api=" + api.version + " pkg=" + pkg.version);
+              process.exit(1);
+            }
+            const required = ["define", "reactive", "effect", "eval", "get", "set", "parseTrigger", "swap", "sanitize", "hydrate", "destroyTree", "store", "directive"];
+            const missing = required.filter((k) => typeof api[k] !== "function");
+            if (missing.length) { console.error("missing API: " + missing.join(", ")); process.exit(1); }
+            if (api.eval({ count: 6 }, "count > 5") !== true) { console.error("eval smoke failed"); process.exit(1); }
+            if (!sandbox.window.LaghuMorph || typeof sandbox.window.LaghuMorph.morph !== "function") {
+              console.error("window.LaghuMorph.morph missing after load");
+              process.exit(1);
+            }
+            console.log("packed API surface verified, version " + api.version);
+          '
+
+  publish-npm:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify the working tree is clean
+        run: |
+          set -euo pipefail
+          # Publishing from a dirty tree ships files that are not in any tag and
+          # cannot be reproduced later.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::working tree is dirty; refusing to publish"
+            git status --porcelain
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Re-run the publish gate
+        # prepublishOnly fires on npm publish: check -> test -> size.
+        run: npm run check && npm run test && npm run size
+
+      - name: Dry run (no upload)
+        if: inputs.dry-run == true
+        run: npm publish --dry-run --access public
+
+      - name: Publish to npm
+        if: inputs.dry-run != true
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

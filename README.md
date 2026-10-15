@@ -716,6 +716,19 @@ conditionals, keyed reorder reuse, two-way inputs, attribute sync,
 triggers, JSON merge, all swap modes, morph focus preservation,
 stores, directives with cleanup, and unknown-action warnings.
 
+Releasing a new version (publishes to npm through CI):
+
+1. Bump `version` in `package.json` and commit.
+2. Create a GitHub Release with tag `vX.Y.Z` matching that version
+   (example: tag `v1.0.1` for version `1.0.1`).
+3. The `Publish` workflow verifies types, tests, sizes, tarball
+   contents, and a packed install smoke test, then publishes with
+   provenance. It refuses when the tree is dirty or the tag and
+   version disagree.
+4. Requirements: an `NPM_TOKEN` secret with publish rights on the
+   `laghu` package. To check without uploading, run the workflow
+   manually from the Actions tab (dry run is the default).
+
 ## 16. Troubleshooting
 
 Unknown action warning: the `data-click` or `data-on` name matches
