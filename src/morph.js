@@ -1,15 +1,40 @@
 // @ts-check
 /**
- * laghu morph plugin (opt-in, ~3kB budget).
- * Id/key-based DOM morph: reuses nodes with same `id` or `data-bkey`,
- * preserves input focus/values, Web Component instances, scroll.
- * Usage: <div data-get="/row" data-target="#list" data-swap="morph:inner">
- * Load AFTER laghu.js. Registers window.LaghuMorph + Laghu.swap hook.
+ * laghu morph plugin (opt-in, separate file, own 3kB gzip budget).
+ *
+ * What it does: updates the DOM in place instead of replacing it.
+ * Nodes with the same id or data-bkey are reused and moved, so input
+ * focus, caret, scroll, video playback, and component instances survive
+ * an HTML swap. Unknown nodes fall back to positional reuse by tag name.
+ *
+ * When to use it: lists and tables fed by the server where a plain
+ * inner swap would lose focus or reset state. For static content the
+ * default destructive swap is cheaper and simpler.
+ *
+ * Rules: give stable rows an id or data-bkey. Mark frozen subtrees
+ * with data-morph-skip (children included). The core data-preserve
+ * rule still applies on top.
+ *
+ * Load AFTER laghu.js. Registers window.LaghuMorph. The core picks it
+ * up automatically for data-swap="morph:inner" and "morph:outer".
+ *
+ * @example
+ * <script src="laghu.min.js"></script>
+ * <script src="morph.min.js"></script>
+ * <ul id="list" data-get="/rows" data-target="#list" data-swap="morph:inner">
+ *   <li id="r1">one</li>
+ * </ul>
  */
 (function () {
   'use strict';
   /**
-   * @param {Element} a @param {Element} b
+   * Copy attributes from the new node onto the live node, remove stale
+   * ones, and sync form control state without touching focused inputs.
+   * A focused input keeps its typed value even if the server HTML
+   * carries a different value attribute.
+   *
+   * @param {Element} a Live node in the document, updated in place.
+   * @param {Element} b Fresh node parsed from the response, read only.
    */
   function syncAttrs(a, b) {
     var bn = b.attributes;
@@ -33,7 +58,14 @@
       if (/** @type {any} */ (b).checked !== undefined) /** @type {any} */ (a).checked = /** @type {any} */ (b).checked;
     }
   }
-  /** @param {Element} el @returns {string|null} */
+  /**
+   * Stable identity of an element for reuse across morphs.
+   * Element id wins ("#r1"), then data-bkey ("k:42"), else null
+   * (positional reuse by tag name).
+   *
+   * @param {Element} el Element to identify.
+   * @returns {string|null} Key, or null when the element has none.
+   */
   function keyOf(el) {
     if (el.id) return '#' + el.id;
     var k = el.getAttribute && el.getAttribute('data-bkey');
@@ -41,7 +73,14 @@
     return null;
   }
   /**
-   * @param {Element} oldEl @param {Element} newEl
+   * Reconcile one live element against one fresh element, recursively.
+   * Same tag: sync attributes, then match children by key (id or
+   * data-bkey), reuse same-tag unkeyed children positionally, create
+   * the rest, and remove stale nodes (running their laghu cleanups).
+   * Different tag: replace outright. data-morph-skip freezes a subtree.
+   *
+   * @param {Element} oldEl Live element, updated in place.
+   * @param {Element} newEl Fresh element describing the target state.
    */
   function morphEl(oldEl, newEl) {
     if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute('data-morph-skip')) return;
@@ -113,7 +152,18 @@
     out.forEach(function (n) { oldEl.appendChild(n); });
   }
   /**
-   * @param {Element} target @param {string} html @param {{mode?: string}} [opts]
+   * Morph a target from an HTML string. Mode "inner" (default) reconciles
+   * children. Mode "outer" reconciles the target element itself against
+   * the first element of the response. Whitespace-only text nodes are
+   * ignored so server formatting never creates phantom diffs.
+   *
+   * @example
+   * LaghuMorph.morph(document.querySelector('#list'), '<li id="r1">one</li>');
+   * LaghuMorph.morph(el, html, { mode: 'outer' });
+   *
+   * @param {Element} target Element to update in place.
+   * @param {string} html Response HTML.
+   * @param {{mode?: string}} [opts] Optional mode, "inner" or "outer".
    */
   function morph(target, html, opts) {
     var mode = (opts && opts.mode) || 'inner';

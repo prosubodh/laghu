@@ -1,14 +1,25 @@
 // @ts-check
 /**
- * laghu.js v1.0.0 full spec — zero-build IIFE, Light-DOM, CSP-safe.
- * Core: Proxy reactivity, hydrate-in-place, template if/for, model, triggers,
- * fetch JSON-into-state + HTML swap (+opt morph hook), attr sync, store, directives.
+ * laghu.js v1.0.0 - zero-build IIFE micro-framework.
+ *
+ * What this file provides:
+ * - Proxy based reactivity with per-binding effects (no Virtual DOM).
+ * - Hydrate-in-place HTML bindings plus template based if/for lists.
+ * - Two-way form bindings, declarative fetch with HTML or JSON swaps.
+ * - Light-DOM Web Components with attribute to state sync.
+ * - Strict CSP compliance: no new Function, no eval, no inline handlers.
+ *
+ * How to load it (no build step, works from file://):
+ *   <script src="laghu.min.js"></script>
+ *   <script>Laghu.define('my-tag', () => ({ state: { n: 0 } }));</script>
+ *
  * @typedef {Object} SetupResult
- * @property {Record<string, any>} [state]
- * @property {Record<string, Function>} [actions]
- * @property {string[]} [observed]
- * @property {(() => void)} [onMount]
- * @property {(() => void)} [onUnmount]
+ * @property {Record<string, any>} [state] Initial state for one component instance.
+ * @property {Record<string, Function>} [actions] Methods callable from data-click and data-on.
+ * @property {string[]} [observed] Attribute names synced into state. Defaults to
+ *   primitive state keys (string, number, boolean).
+ * @property {(() => void)} [onMount] Runs once after the element is hydrated.
+ * @property {(() => void)} [onUnmount] Reserved for pairing with onMount in user code.
  */
 (function () {
   'use strict';
@@ -42,7 +53,25 @@
     jobQueue.add(fn);
     if (!flushing) { flushing = true; Promise.resolve().then(flush); }
   }
-  /** @param {Function} fn @returns {Function} */
+  /**
+   * Run a function now and re-run it whenever reactive state it read
+   * changes. Each DOM binding creates one effect, so updates touch only
+   * the exact node that depends on the changed value.
+   *
+   * Effects are batched in a microtask: many synchronous writes cause
+   * one re-run.
+   *
+   * @example
+   * var state = Laghu.reactive({ count: 0 });
+   * var stop = Laghu.effect(function () {
+   *   document.querySelector('#n').textContent = String(state.count);
+   * });
+   * state.count = 1; // schedules one re-run, shows "1"
+   * stop(); // unsubscribe, effect never runs again
+   *
+   * @param {Function} fn Work to run and re-run on dependency change.
+   * @returns {Function} Call to unsubscribe the effect.
+   */
   function effect(fn) {
     var stopped = false;
     var run = function () {
@@ -73,8 +102,20 @@
   /** @param {any} v @returns {boolean} */
   function isObj(v) { return v !== null && typeof v === 'object'; }
   /**
-   * @param {any} scope @param {string} path
-   * @returns {any}
+   * Read a dotted path from a scope, walking the prototype chain for the
+   * first segment (so child scopes inherit parent values). Returns
+   * undefined for missing paths instead of throwing.
+   *
+   * Paths starting with $store read from a named global store:
+   * "$store.cart.n" reads store "cart", key "n".
+   *
+   * @example
+   * Laghu.get({ user: { name: 'Ada' } }, 'user.name'); // 'Ada'
+   * Laghu.get({}, 'missing.deep');                     // undefined
+   *
+   * @param {any} scope Object (often with parent scopes on its prototype).
+   * @param {string} path Dotted path such as "user.name".
+   * @returns {any} Value at the path, or undefined.
    */
   function getPath(scope, path) {
     if (!path) return undefined;
@@ -99,7 +140,18 @@
     }
     return cur;
   }
-  /** @param {any} scope @param {string} path @param {any} val */
+  /**
+   * Write a dotted path into a scope, creating intermediate objects.
+   * Supports $store paths the same way getPath reads them.
+   *
+   * @example
+   * var s = {};
+   * Laghu.set(s, 'user.name', 'Ada'); // s becomes { user: { name: 'Ada' } }
+   *
+   * @param {any} scope Object to write into (reactive or plain).
+   * @param {string} path Dotted path such as "user.name".
+   * @param {any} val Value to store.
+   */
   function setPath(scope, path, val) {
     var parts = String(path).split('.');
     if (parts[0].trim() === '$store') {
@@ -121,7 +173,19 @@
     }
     cur[parts[parts.length - 1]] = val;
   }
-  /** @param {object} obj @returns {any} */
+  /**
+   * Wrap a plain object so reads track effects and writes trigger them.
+   * Only plain objects and arrays are wrapped. Primitives pass through.
+   * Nested objects are wrapped lazily on first read.
+   *
+   * @example
+   * var state = Laghu.reactive({ user: { name: 'Ada' }, tags: [] });
+   * state.user.name = 'Grace'; // triggers effects that read user or user.name
+   * state.tags.push('x');      // triggers effects that read tags or length
+   *
+   * @param {object} obj Plain object or array to make reactive.
+   * @returns {any} Reactive proxy around the same data.
+   */
   function reactive(obj) {
     if (!isObj(obj)) return obj;
     return new Proxy(obj, {
@@ -158,7 +222,24 @@
     out.push(cur);
     return out;
   }
-  /** @param {any} scope @param {string} expr @returns {any} */
+  /**
+   * Evaluate a small expression against a scope without new Function,
+   * so it runs under strict Content Security Policy.
+   *
+   * Supported: dotted paths, string/number/true/false/null literals,
+   * not (!), comparisons (>, <, >=, <=, ==, !=, ===, !==),
+   * and/or (&&, ||), and no-argument calls such as "reset()".
+   * Anything else returns undefined. Unknown method names warn in dev.
+   *
+   * @example
+   * Laghu.eval({ count: 6 }, 'count > 5');       // true
+   * Laghu.eval({ user: { name: 'Ada' } }, 'user.name'); // 'Ada'
+   * Laghu.eval({ open: false }, '!open');         // true
+   *
+   * @param {any} scope Scope to resolve paths and methods against.
+   * @param {string} expr Expression text from a data-* attribute.
+   * @returns {any} Result of the expression.
+   */
   function evalExpr(scope, expr) {
     var s = String(expr).trim();
     if (!s) return undefined;
@@ -202,7 +283,20 @@
     }
     return getPath(scope, s);
   }
-  /** @param {any} scope @param {Record<string, Function>} actions @param {string} code */
+  /**
+   * Run one action string from data-click or data-on. Handles, in order:
+   * "count++" and "count--" (numeric helpers), "path = expr" (assignment),
+   * a named action from the component ("increment" or "increment()"),
+   * then any expression that resolves to a function.
+   *
+   * Unknown names warn in dev and dispatch laghu:unknown-action on
+   * document, so typos fail loudly instead of silently doing nothing.
+   * The function runs with the scope as "this", so actions use this.count.
+   *
+   * @param {any} scope Reactive state the action runs against.
+   * @param {Record<string, Function>} actions Named actions of the component.
+   * @param {string} code Raw attribute text, for example "increment".
+   */
   function execAction(scope, actions, code) {
     var s = String(code).trim();
     if (!s) return;
@@ -248,7 +342,14 @@
     var self = /** @type {any} */ (root);
     if (self._bReq) { try { self._bReq.abort(); } catch (e) {} self._bReq = null; }
   }
-  /** @param {string|null} raw @returns {Record<string, any>} */
+  /**
+   * Parse one data-scope JSON string. data-scope must be valid JSON with
+   * double quotes, for example data-scope='{"count": 0}'. Anything else
+   * warns in dev and yields an empty object.
+   *
+   * @param {string|null} raw Raw attribute text.
+   * @returns {Record<string, any>} Parsed object, or empty on error.
+   */
   function parseScope(raw) {
     if (!raw) return {};
     try { return JSON.parse(raw); } catch (e) {
@@ -256,7 +357,20 @@
       return {};
     }
   }
-  /** @param {string|null|undefined} raw @param {any} cur @returns {any} */
+  /**
+   * Convert an HTML attribute string into the type of the current state
+   * value. Numbers stay numbers, booleans stay booleans, everything else
+   * stays a string. Used when syncing observed attributes into state.
+   *
+   * @example
+   * coerceAttr('5', 0);       // 5 (number, because current state is numeric)
+   * coerceAttr('false', true); // false (boolean)
+   * coerceAttr('hi', '');      // 'hi' (string)
+   *
+   * @param {string|null|undefined} raw Attribute text from the DOM.
+   * @param {any} cur Current state value, used only for its type.
+   * @returns {any} Converted value.
+   */
   function coerceAttr(raw, cur) {
     if (raw === null || raw === undefined) return cur;
     if (typeof cur === 'boolean') return raw !== 'false' && raw !== '0';
@@ -281,8 +395,31 @@
     return 'click';
   }
   /**
-   * Full trigger spec: "click delay:500ms throttle:1s once changed queue:last from:document every 2s load revealed"
-   * @param {string} spec @param {Element} el
+   * Parse a data-trigger string into a modifier object.
+   *
+   * Grammar (order free, first bare word is the event name):
+   *   "[event] [delay:500ms] [throttle:1s] [once] [changed]
+   *    [queue:first|last|all|none] [from:selector|document|body]
+   *    [every 2s] [load] [revealed]"
+   *
+   * Meanings: delay waits before firing (retrigger restarts the wait).
+   * throttle ignores repeats inside the window. once fires a single time.
+   * changed fires only when an input value differs from last time.
+   * queue controls overlapping fetches: last aborts the previous request,
+   * first and none skip while one is in flight, all allows parallel.
+   * from listens on another root (document, body, or a selector matched
+   * against the event target). every polls on an interval. load fires once
+   * the document is ready. revealed fires when the element scrolls into view.
+   *
+   * @example
+   * Laghu.parseTrigger('click delay:500ms once', btn);
+   * Laghu.parseTrigger('every 5s', el); // { every: 5000, ... }
+   *
+   * @param {string} spec Raw data-trigger text.
+   * @param {Element} el Element used for the default event when spec is empty.
+   * @returns {{on: string, delay: number, throttle: number, once: boolean,
+   *   changed: boolean, queue: string, from: string, every: number,
+   *   load: boolean, revealed: boolean}} Parsed trigger.
    */
   function parseTrigger(spec, el) {
     /** @type {any} */
@@ -309,8 +446,15 @@
     return out;
   }
   /**
-   * Bind event + modifiers (delay/throttle/once/changed/from). Returns cleanup.
-   * @param {Element} el @param {string} spec @param {(e: Event) => void} fn @returns {Function}
+   * Attach a parsed trigger to an element and return a cleanup function.
+   * The cleanup is also registered on the element, so destroyTree and
+   * element removal automatically detach listeners, timers, intervals,
+   * and observers. No manual bookkeeping needed.
+   *
+   * @param {Element} el Element to listen on (or whose removal cleans up).
+   * @param {string} spec data-trigger text, see parseTrigger.
+   * @param {(e: Event) => void} fn Handler to call when the trigger fires.
+   * @returns {Function} Call to detach everything this binding created.
    */
   function bindTrigger(el, spec, fn) {
     var t = parseTrigger(spec, el);
@@ -389,7 +533,30 @@
     return cleanup;
   }
   /**
-   * @param {Element} root @param {Record<string, any>} state @param {Record<string, Function>} [actions]
+   * Scan a root element once and wire every laghu attribute found inside.
+   *
+   * Handled attributes: data-bind and data-text (textContent),
+   * data-html (innerHTML through the sanitize hook), data-bind:attr,
+   * data-class:name, data-style:prop, data-model (two-way form binding),
+   * data-show and data-if (hidden toggle on elements, real attach and
+   * detach on template tags), template data-for lists with data-key,
+   * data-click, data-on:event with .prevent .stop .once, data-init,
+   * custom directives, and data-get/post/put/patch/delete fetch blocks.
+   *
+   * Every wiring registers its cleanup on the element, so destroyTree
+   * or node removal reverses all of it: effects stop, listeners detach,
+   * intervals and observers disconnect, in-flight fetches abort.
+   *
+   * @example
+   * var root = document.querySelector('#app');
+   * var state = Laghu.hydrate(root, { count: 0 }, {
+   *   increment: function () { this.count++; }
+   * });
+   * state.count = 5; // bound nodes update on the next microtask
+   *
+   * @param {Element} root Root to scan (bindings inside shadow roots are skipped).
+   * @param {Record<string, any>} state State object, made reactive by the caller path.
+   * @param {Record<string, Function>} [actions] Named actions for click and event handlers.
    */
   function hydrate(root, state, actions) {
     actions = actions || {};
@@ -581,7 +748,7 @@
             if (h2.nextSibling !== want || true) parent.insertBefore(h2, want);
           }
         }
-        // fix order: above loop appends in order before anchor only if we go in order — but insertBefore same anchor in order works
+        // fix order: the loop inserts each holder before the anchor in sequence
         rows.forEach(function (row2, kk) {
           if (!seen.has(kk)) {
             row2.nodes.forEach(function (nn) {
@@ -668,7 +835,29 @@
     try { return JSON.parse(s); } catch (e) { return null; }
   }
   /**
-   * @param {HTMLElement} el @param {any} scope @param {string} method @param {string} url @param {string} targetSel @param {string} swap
+   * Fire one declarative request for a data-get/post/put/patch/delete
+   * element. JSON responses merge into state with Object.assign (or set
+   * state.result for non-objects). HTML or text responses swap into the
+   * data-target element (default: the element itself).
+   *
+   * Request lifecycle: sets data-request on the element, shows
+   * data-indicator, disables data-disable elements, dispatches
+   * laghu:before-request (cancelable), laghu:after-request, and
+   * laghu:request-error. Overlap follows the parsed queue modifier and
+   * uses AbortController, so queue:last cancels the previous request.
+   *
+   * data-vals carries parameters: JSON such as '{"q": "x"}', the word
+   * "form" to serialize the enclosing form, or nothing (a surrounding
+   * form still serializes for non-GET). GET appends a query string,
+   * other methods send a JSON body. data-headers merges extra headers.
+   * data-select picks one selector out of an HTML response before swap.
+   *
+   * @param {HTMLElement} el Element carrying the data-* fetch attributes.
+   * @param {any} scope State JSON merges into and swaps hydrate against.
+   * @param {string} method Uppercase HTTP method.
+   * @param {string} url Request URL (query params appended for GET).
+   * @param {string} targetSel data-target selector, empty means the element.
+   * @param {string} swap data-swap mode, see swapHtml.
    */
   function doFetch(el, scope, method, url, targetSel, swap) {
     var m = parseTrigger(el.getAttribute('data-trigger') || defaultEvent(el), el);
@@ -755,7 +944,15 @@
       if (DEV && typeof console !== 'undefined') console.error('[laghu] fetch', err);
     });
   }
-  /** @param {HTMLFormElement} form @returns {Record<string, any>} */
+  /**
+   * Read all successful controls of a form into a plain object.
+   * Repeated names (checkbox groups, multi selects) become arrays.
+   * File inputs become file names; files themselves are not uploaded
+   * (fetch sends JSON, so use a custom handler for uploads).
+   *
+   * @param {HTMLFormElement} form Form to read.
+   * @returns {Record<string, any>} Name to value map.
+   */
   function serializeForm(form) {
     /** @type {Record<string, any>} */
     var out = {};
@@ -769,7 +966,32 @@
     return out;
   }
   /**
-   * @param {Element} target @param {string} html @param {string} swap @param {any} scope
+   * Swap HTML into the page and re-hydrate bindings in the new content.
+   *
+   * Modes: inner (replace children), outer (replace the element itself),
+   * text (plain text, no HTML parsing), append and beforeend (add at end),
+   * prepend and afterbegin (add at start), beforebegin and afterend
+   * (insert as siblings), delete (remove the target), none (skip, event
+   * only), morph:inner and morph:outer (reuse matching nodes through the
+   * morph plugin instead of replacing them).
+   *
+   * Safety and comfort behavior, every mode: HTML passes through the
+   * sanitize hook first. Nodes marked data-preserve with an id survive
+   * the swap by identity. New content hydrates against the given scope.
+   * laghu:before-swap and laghu:after-swap dispatch on the target.
+   * Focused element id and text caret restore after the swap.
+   *
+   * morph:* needs morph.js loaded (window.LaghuMorph). Without it, morph
+   * warns in dev and falls back to a plain inner swap.
+   *
+   * @example
+   * Laghu.swap(document.querySelector('#list'), '<li>A</li>', 'append', state);
+   * Laghu.swap(document.querySelector('#list'), html, 'morph:inner', state);
+   *
+   * @param {Element} target Element the swap mode applies to.
+   * @param {string} html Response HTML (already selected if data-select used).
+   * @param {string} swap Mode name, case insensitive.
+   * @param {any} scope State the swapped-in content hydrates against.
    */
   function swapHtml(target, html, swap, scope) {
     var s = String(swap || 'inner').toLowerCase();
@@ -834,7 +1056,14 @@
     target.dispatchEvent(new CustomEvent('laghu:after-swap', { detail: { swap: s } }));
     restoreFocus(focusId, selStart, selEnd);
   }
-  /** @param {string|null} id @param {number} a @param {number} b */
+  /**
+   * Refocus an element by id after a swap and restore a text caret.
+   * Missing ids are ignored so swaps never throw on focus handling.
+   *
+   * @param {string|null} id Element id to refocus, or null to skip.
+   * @param {number} a Caret start, -1 keeps the default.
+   * @param {number} b Caret end, -1 keeps the default.
+   */
   function restoreFocus(id, a, b) {
     if (!id) return;
     var f = document.getElementById(id);
@@ -846,8 +1075,38 @@
     }
   }
   /**
-   * @param {string} tag
-   * @param {() => SetupResult} setup
+   * Register a Light-DOM Web Component. Renders into the Light DOM
+   * (no Shadow DOM), so global CSS, forms, labels, and assistive tech
+   * keep working with zero extra code.
+   *
+   * Per instance lifecycle: setup() runs fresh for every element,
+   * properties assigned before registration upgrade into state,
+   * observed attributes coerce into state with their state-type,
+   * children hydrate against the new reactive state, onMount runs,
+   * the is-defined class applies for FOUC styling, and removal
+   * destroys all bindings. Moving an element with moveBefore keeps
+   * state because connectedMoveCallback is a no-op by design.
+   *
+   * Attribute sync is one way (attribute into state, never reflected
+   * back) to avoid loops. Complex values travel through properties:
+   *   document.querySelector('user-card').state.user = {...}
+   * or a direct property that upgrades on connect.
+   *
+   * @example
+   * Laghu.define('counter-widget', () => ({
+   *   state: { count: 0 },
+   *   actions: {
+   *     increment: function () { this.count++; }
+   *   },
+   *   observed: ['count'],
+   *   onMount: function () { console.log('ready'); }
+   * }));
+   * // <counter-widget count="5"> starts at 5, not 0.
+   *
+   * @param {string} tag Custom element name, must contain a hyphen.
+   * @param {() => SetupResult} setup Factory returning fresh state,
+   *   actions, observed names, and onMount per instance.
+   * @returns {any} The registered custom element class.
    */
   function define(tag, setup) {
     if (!tag || tag.indexOf('-') < 0) throw new Error('[laghu] tag must contain hyphen: ' + tag);
@@ -938,6 +1197,34 @@
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
+  /**
+   * Public API attached as window.Laghu. Every method is documented on
+   * the function that implements it; this table is the map:
+   *
+   * - version: "1.0.0" string for cache busting and bug reports.
+   * - define(tag, setup): register a Light-DOM component, see define.
+   * - reactive(obj): make state observable, see reactive.
+   * - effect(fn): subscribe to state reads, see effect.
+   * - eval(scope, expr): CSP-safe expression reader, see evalExpr.
+   * - get(scope, path) and set(scope, path, val): path access, see
+   *   getPath and setPath. "$store.name.key" reaches global stores.
+   * - parseTrigger(spec, el): parse data-trigger text, see parseTrigger.
+   * - swap(target, html, mode, scope): swap and hydrate, see swapHtml.
+   * - css: FOUC guard string. Inject it or copy the rule into your CSS:
+   *   custom tags hide until registered, then show with is-defined.
+   * - sanitize(fn): replace the HTML pass-through. Pass a DOMPurify
+   *   style function in production when rendering server HTML:
+   *   Laghu.sanitize(function (h) { return DOMPurify.sanitize(h); });
+   * - hydrate(root, state, actions): scan and bind, returns the
+   *   reactive state. Called automatically for [data-scope] islands
+   *   on DOMContentLoaded and for swapped-in content.
+   * - destroyTree(root): stop effects, detach listeners, abort fetches
+   *   under root. Called automatically on removal and before swaps.
+   * - store(name, init?): create or fetch a named global reactive
+   *   store. Read it in expressions as $store.name.key.
+   * - directive(name, fn): register data-name. fn receives
+   *   { el, get, effect, scope } and may return a cleanup function.
+   */
   var api = {
     version: VERSION,
     define: define,
