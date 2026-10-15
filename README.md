@@ -84,12 +84,27 @@ like `github.com/.../blob/...` serves HTML, and
 `raw.githubusercontent.com` serves plain text, which browsers refuse
 to run as a script.
 
-Use jsDelivr instead. It serves GitHub files with the correct
-JavaScript content type:
+Use jsDelivr instead. It serves files with the correct
+JavaScript content type. Two flavors, pick one per page:
+
+npm package (preferred, versioned by the registry):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/laghu@1.0.0/dist/laghu.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/laghu@1.0.0/dist/morph.min.js"></script>
+```
+
+GitHub release files (works without any registry):
 
 ```html
 <script src="https://cdn.jsdelivr.net/gh/prosubodh/laghu@v1.0.0/dist/laghu.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/prosubodh/laghu@v1.0.0/dist/morph.min.js"></script>
+```
+
+With a bundler or Node tooling:
+
+```sh
+npm install laghu
 ```
 
 Rules for production pages:
