@@ -1,0 +1,19 @@
+{
+  "name": "laghu.js",
+  "version": "1.0.0",
+  "description": "Zero-build drop-in micro-framework: Light-DOM Web Components + Proxy reactivity + JSON-into-state fetch",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p jsconfig.json",
+    "test": "node test/run.mjs",
+    "size": "node scripts/size.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "terser": "^5.51.2"
+  }
+}

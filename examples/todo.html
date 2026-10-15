@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js — todo (for + model + keyed)</title>
+<style>li{display:flex;gap:8px}</style>
+<div data-scope='{"q":"","todos":[{"id":1,"t":"milk","done":false}]}'>
+  <input data-model="q" placeholder="new todo">
+  <button data-click="add">Add</button>
+  <ul><template data-for="td in todos" data-key="id">
+    <li><input type="checkbox" data-model="td.done"><span data-bind="td.t"></span></li>
+  </template></ul>
+  <p data-show="todos.length">count: <span data-bind="todos.length"></span></p>
+</div>
+<script src="../dist/laghu.min.js"></script>
+<script>
+var root = document.querySelector('[data-scope]');
+var s = Laghu.hydrate(root, JSON.parse(root.dataset.scope));
+s.add = function () {
+  if (!this.q.trim()) return;
+  this.todos = this.todos.concat([{ id: Date.now(), t: this.q, done: false }]);
+  this.q = '';
+};
+</script>

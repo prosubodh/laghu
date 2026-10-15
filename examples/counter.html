@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js — counter</title>
+<style>counter-widget:not(:defined){visibility:hidden}counter-widget{display:block}</style>
+<counter-widget>
+  <p>Count: <strong data-bind="count">0</strong></p>
+  <button data-click="increment">+1</button>
+  <button data-click="count++">++ expr</button>
+</counter-widget>
+<script src="../src/laghu.js"></script>
+<script>
+Laghu.define('counter-widget', () => ({
+  state: { count: 0 },
+  actions: { increment() { this.count++; } }
+}));
+</script>
