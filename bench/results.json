@@ -1,0 +1,42 @@
+[
+  {
+    "name": "vanilla",
+    "jsRaw": 2255,
+    "jsGzip": 889,
+    "loadMs": 43,
+    "clickMs": 0.1,
+    "heapKB": 2582
+  },
+  {
+    "name": "laghu",
+    "jsRaw": 21865,
+    "jsGzip": 7119,
+    "loadMs": 44,
+    "clickMs": 0.2,
+    "heapKB": 2862
+  },
+  {
+    "name": "react",
+    "jsRaw": 220806,
+    "jsGzip": 68244,
+    "loadMs": 63,
+    "clickMs": 0.2,
+    "heapKB": 3435
+  },
+  {
+    "name": "vue",
+    "jsRaw": 64154,
+    "jsGzip": 25035,
+    "loadMs": 46,
+    "clickMs": 0.3,
+    "heapKB": 3043
+  },
+  {
+    "name": "angular",
+    "jsRaw": 112782,
+    "jsGzip": 38075,
+    "loadMs": 53,
+    "clickMs": 0.2,
+    "heapKB": 3402
+  }
+]

@@ -708,6 +708,12 @@ Measured after minification:
 
 For scale: htmx alone is about 16kB gzip, Alpine with a few plugins
 is 12 to 15kB. laghu core plus morph stays under half of either.
+End-to-end proof lives in `bench/RESULTS.md`: the same TicTacToe in
+laghu, vanilla, React, Vue, and Angular, measured in headless
+Chromium. laghu ships 3 to 10 times less JavaScript than the
+frameworks, holds the lowest heap of the four, and ties them on
+interaction latency (all sub-millisecond); vanilla remains the
+floor, as zero abstraction must.
 
 ## 14. Worked examples
 
