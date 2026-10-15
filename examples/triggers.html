@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js - triggers</title>
+<div data-scope='{"fast":0,"slow":0,"single":0,"auto":0,"loaded":"no","picked":"r","echo":"none"}'>
+  <p>
+    <button data-click="fast++">plain (every click counts)</button>
+    <span data-bind="fast"></span>
+  </p>
+  <p>
+    <button data-click="slow++" data-trigger="click throttle:1s">throttled (one per second)</button>
+    <span data-bind="slow"></span>
+  </p>
+  <p>
+    <button data-click="single++" data-trigger="click once">once only</button>
+    <span data-bind="single"></span>
+  </p>
+  <p>
+    <button data-click="auto++" data-trigger="every 1s">auto (ticks each second)</button>
+    <span data-bind="auto"></span>
+  </p>
+  <p data-init="loaded = 'yes'">loaded flag: <span data-bind="loaded"></span></p>
+  <form data-on:submit.prevent="noop">
+    <select data-model="picked" data-on:change="echo = picked">
+      <option value="r">red</option>
+      <option value="g">green</option>
+    </select>
+    <button>Submit (page must not reload)</button>
+  </form>
+  <p>echo: <span data-bind="echo"></span></p>
+</div>
+<script src="../dist/laghu.min.js"></script>
+<script>
+  var root = document.querySelector('[data-scope]');
+  var s = Laghu.hydrate(root, JSON.parse(root.getAttribute('data-scope')));
+  s.noop = function () { /* submit was prevented, nothing to do */ };
+</script>

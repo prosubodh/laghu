@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js - swap modes</title>
+<div data-scope='{"n":0}'>
+  <p>
+    <button data-click="addInner">inner</button>
+    <button data-click="addAppend">append</button>
+    <button data-click="addPrepend">prepend</button>
+    <button data-click="replaceOuter">outer</button>
+    <button data-click="dropDelete">delete</button>
+    <button data-click="bringBack">bring back</button>
+    <button data-click="asText">as text</button>
+    <button data-click="doNothing">none</button>
+    <button data-click="reset">reset</button>
+  </p>
+  <div id="stage">
+    <ul id="list"><li>start</li></ul>
+  </div>
+  <div id="box">
+    <input id="typed" value="server">
+    <p id="keep" data-preserve>keep me (same node survives swaps)</p>
+  </div>
+  <button data-click="morphBox">morph box (typing and focus survive)</button>
+  <ul id="log"></ul>
+</div>
+<script src="../dist/laghu.min.js"></script>
+<script src="../dist/morph.min.js"></script>
+<script>
+  var root = document.querySelector('[data-scope]');
+  var s = Laghu.hydrate(root, { n: 0 }, {
+    addInner: function () { this.n++; Laghu.swap(document.querySelector('#list'), '<li>item ' + this.n + '</li>', 'inner', this); },
+    addAppend: function () { this.n++; Laghu.swap(document.querySelector('#list'), '<li>item ' + this.n + '</li>', 'append', this); },
+    addPrepend: function () { this.n++; Laghu.swap(document.querySelector('#list'), '<li>item ' + this.n + '</li>', 'prepend', this); },
+    replaceOuter: function () {
+      Laghu.swap(document.querySelector('#list'), '<ol id="list"><li>replaced whole list</li></ol>', 'outer', this);
+    },
+    dropDelete: function () { Laghu.swap(document.querySelector('#list'), '', 'delete', this); },
+    bringBack: function () {
+      var host = document.querySelector('#stage');
+      if (!document.querySelector('#list')) {
+        host.insertAdjacentHTML('afterbegin', '<ul id="list"><li>back again</li></ul>');
+        Laghu.hydrate(host, this, {});
+      }
+    },
+    asText: function () { Laghu.swap(document.querySelector('#list'), '<li>not a tag</li>', 'text', this); },
+    doNothing: function () { Laghu.swap(document.querySelector('#list'), '<li>ignored</li>', 'none', this); },
+    reset: function () { Laghu.swap(document.querySelector('#stage'), '<ul id="list"><li>start</li></ul>', 'inner', this); },
+    morphBox: function () {
+      Laghu.swap(
+        document.querySelector('#box'),
+        '<input id="typed" value="other"><p id="keep" data-preserve>fresh copy</p>',
+        'morph:inner',
+        this
+      );
+    }
+  });
+  document.querySelector('[data-scope]').addEventListener('laghu:after-swap', function (e) {
+    var li = document.createElement('li');
+    li.textContent = 'swapped: ' + (e.detail && e.detail.swap);
+    document.querySelector('#log').appendChild(li);
+  });
+</script>

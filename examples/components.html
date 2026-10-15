@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js - components</title>
+<style>
+  user-card:not(:defined) { visibility: hidden; }
+  user-card { display: block; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
+</style>
+
+<user-card name="Grace">
+  <strong data-bind="name"></strong>
+  has <span data-bind="likes"></span> likes
+  <button data-click="like">like</button>
+</user-card>
+
+<user-card name="Ada">
+  <strong data-bind="name"></strong>
+  has <span data-bind="likes"></span> likes
+  <button data-click="like">like</button>
+</user-card>
+
+<div data-scope='{}'>
+  <button data-click="rename">rename first card to Hopper</button>
+  <button data-click="remove">remove first card</button>
+  <button data-click="restore">restore first card</button>
+  <p id="mountlog"></p>
+</div>
+
+<script src="../dist/laghu.min.js"></script>
+<script>
+  function log(msg) {
+    var p = document.querySelector('#mountlog');
+    p.textContent += msg + ' ';
+  }
+  Laghu.define('user-card', function () {
+    return {
+      state: { name: '', likes: 0 },
+      actions: {
+        like: function () { this.likes++; }
+      },
+      observed: ['name'],
+      onMount: function () { log('mounted:' + this.name); }
+    };
+  });
+
+  var root = document.querySelector('[data-scope]');
+  var first = document.querySelector('user-card');
+  Laghu.hydrate(root, {}, {
+    rename: function () { first.setAttribute('name', 'Hopper'); },
+    remove: function () {
+      first.remove();
+      log('unmounted');
+    },
+    restore: function () {
+      if (!document.contains(first)) {
+        document.body.insertBefore(first, root);
+      }
+    }
+  });
+  document.querySelector('user-card').addEventListener('laghu:unmount', function () {
+    log('unmount-event');
+  });
+</script>

@@ -550,7 +550,9 @@ replacing. `opts.mode` is `inner` (default) or `outer`.
 
 ## 7. Events reference
 
-All names are CustomEvents. Listen with `addEventListener`:
+All names are CustomEvents, and all of them bubble, so one listener
+on a section or on document observes every child. Listen with
+`addEventListener`:
 
 - `laghu:before-request`: cancelable, `detail` has `url`, `method`.
   Call `preventDefault()` to stop the fetch (for confirm dialogs).
@@ -714,8 +716,23 @@ See the `examples/` folder. Each file opens directly from disk.
 - `counter.html`: one component, one binding, one action.
 - `todo.html`: island with `data-model` input, keyed `data-for`
   list, checkbox models, `data-show` counter.
+- `model.html`: every two-way input type (text, number, single
+  checkbox, checkbox group, radio, single select, multi select,
+  textarea) with live mirrors and reset.
+- `triggers.html`: throttle, once, interval, load, init, change
+  write-through, and prevented form submit.
+- `swaps.html`: every swap mode, the swap event log,
+  `data-preserve`, and a morph swap that keeps typing and focus.
+- `components.html`: two independent instances, attribute sync,
+  mount and unmount observation, removal and restore.
+- `store.html`: two islands sharing one `$store` counter and name.
+- `directives.html`: custom ticker and autofocus directives,
+  template removal running directive cleanup, class binding.
 - `fetch.html`: JSON button plus morph list swap (needs a server
-  for the URLs, or swap in the stub URLs for local JSON files).
+  for the URLs, or swap in local JSON files).
+
+`test/examples.mjs` boots every file above and drives it: 48
+assertions, all passing alongside the 37 in `test/run.mjs`.
 
 ## 15. Checking your setup
 
@@ -723,13 +740,15 @@ See the `examples/` folder. Each file opens directly from disk.
 npm install
 npx tsc --noEmit -p jsconfig.json
 node scripts/size.mjs
-node test/run.mjs
+npm test
 ```
 
-37 tests cover: counter increments, text and attribute bindings,
-conditionals, keyed reorder reuse, two-way inputs, attribute sync,
-triggers, JSON merge, all swap modes, morph focus preservation,
-stores, directives with cleanup, and unknown-action warnings.
+85 tests cover (37 in `test/run.mjs` plus 48 in `test/examples.mjs`):
+counter increments, text and attribute bindings, conditionals, keyed
+reorder reuse, two-way inputs, attribute sync, triggers, JSON merge,
+all swap modes, morph focus preservation, stores, directives with
+cleanup, unknown-action warnings, and every shipped example page
+driven end to end.
 
 Releasing a new version (publishes to npm through CI):
 
@@ -781,6 +800,7 @@ script tag after the core.
 - `dist/laghu.min.js`, `dist/morph.min.js`: minified builds.
 - `dist/laghu.d.ts`: TypeScript declarations for consumers.
 - `test/run.mjs`: jsdom suite, 37 assertions.
+- `test/examples.mjs`: boots every example page and drives it, 48 assertions.
 - `scripts/size.mjs`: minifies and enforces gzip budgets.
 - `examples/`: three pages opening from disk.
 - `jsconfig.json`: strict `checkJs` config used by editors and CI.

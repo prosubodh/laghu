@@ -143,6 +143,9 @@
   /**
    * Write a dotted path into a scope, creating intermediate objects.
    * Supports $store paths the same way getPath reads them.
+   * Writes follow the prototype chain: when the head key already
+   * exists on an ancestor scope, the ancestor updates instead of the
+   * child shadowing it. Fresh keys land directly on the scope.
    *
    * @example
    * var s = {};
@@ -165,7 +168,16 @@
       c2[parts[parts.length - 1]] = val;
       return;
     }
-    var cur = scope;
+    // Write through the scope chain: when the head key already lives on
+    // an ancestor (child row scopes, $event wrappers), update the owner
+    // instead of shadowing it on the child. Fresh keys land on scope.
+    var base = scope;
+    var node = scope;
+    while (node && node !== Object.prototype) {
+      if (Object.prototype.hasOwnProperty.call(node, parts[0])) { base = node; break; }
+      node = Object.getPrototypeOf(node);
+    }
+    var cur = base;
     for (var i = 0; i < parts.length - 1; i++) {
       var key = parts[i];
       if (!isObj(cur[key])) cur[key] = {};
@@ -327,16 +339,35 @@
     if (!list) { list = []; /** @type {any} */ (el)._bcu = list; }
     list.push(fn);
   }
+  /**
+   * One binding per element per kind. hydrate rescans whole subtrees
+   * (template inserts, swaps), so without this guard already wired nodes
+   * would collect duplicate effects and listeners. Returns true when
+   * this kind was already wired on this element.
+   *
+   * @param {Element} el Element carrying the attribute.
+   * @param {string} key Binding kind, for example "click" or "bind".
+   * @returns {boolean} True when already wired, meaning skip.
+   */
+  function claimed(el, key) {
+    var host = /** @type {any} */ (el);
+    var map = host._bH || (host._bH = {});
+    if (map[key]) return true;
+    map[key] = 1;
+    return false;
+  }
   /** @param {Element} root */
   function destroyTree(root) {
     if (/** @type {any} */ (root)._bcu) {
       /** @type {any} */ (root)._bcu.forEach(function (/** @type {Function} */ fn) { try { fn(); } catch (e) {} });
       /** @type {any} */ (root)._bcu = [];
     }
+    /** @type {any} */ (root)._bH = undefined;
     var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
     for (var i = 0; i < kids.length; i++) {
       var c = /** @type {any} */ (kids[i]);
       if (c._bcu) { c._bcu.forEach(function (/** @type {Function} */ fn) { try { fn(); } catch (e) {} }); c._bcu = []; }
+      c._bH = undefined;
       if (c._bReq) { try { c._bReq.abort(); } catch (e) {} c._bReq = null; }
     }
     var self = /** @type {any} */ (root);
@@ -566,12 +597,14 @@
     }
     root.querySelectorAll('[data-bind],[data-text]').forEach(function (node) {
       var el = /** @type {HTMLElement} */ (node);
+      if (claimed(el, 'bind')) return;
       var path = el.getAttribute('data-bind') || el.getAttribute('data-text') || '';
       var stop = effect(function () { el.textContent = String(evalExpr(scope, path) ?? ''); });
       onCleanup(el, stop);
     });
     root.querySelectorAll('[data-html]').forEach(function (node) {
       var el = /** @type {HTMLElement} */ (node);
+      if (claimed(el, 'html')) return;
       var path = el.getAttribute('data-html') || '';
       var stop = effect(function () { el.innerHTML = sanitize(String(evalExpr(scope, path) ?? '')); });
       onCleanup(el, stop);
@@ -581,6 +614,7 @@
       Array.prototype.forEach.call(el.attributes || [], function (/** @type {Attr} */ a) {
         var an = a.name;
         if (an.indexOf('data-bind:') === 0) {
+          if (claimed(el, 'a:' + an)) return;
           var attr = an.slice('data-bind:'.length);
           var expr = a.value;
           var stop = effect(function () {
@@ -590,11 +624,13 @@
           });
           onCleanup(el, stop);
         } else if (an.indexOf('data-class:') === 0) {
+          if (claimed(el, 'a:' + an)) return;
           var cls = an.slice('data-class:'.length);
           var e2 = a.value;
           var s2 = effect(function () { el.classList.toggle(cls, !!evalExpr(scope, e2)); });
           onCleanup(el, s2);
         } else if (an.indexOf('data-style:') === 0) {
+          if (claimed(el, 'a:' + an)) return;
           var prop = an.slice('data-style:'.length);
           var e3 = a.value;
           var s3 = effect(function () {
@@ -608,6 +644,7 @@
     // two-way model: text/number/checkbox/radio/select/textarea
     root.querySelectorAll('[data-model]').forEach(function (node) {
       var el = /** @type {any} */ (node);
+      if (claimed(el, 'model')) return;
       var path = el.getAttribute('data-model') || '';
       var isCheck = el.type === 'checkbox';
       var isRadio = el.type === 'radio';
@@ -657,6 +694,7 @@
     });
     root.querySelectorAll('[data-show]').forEach(function (node) {
       var el = /** @type {HTMLElement} */ (node);
+      if (claimed(el, 'show')) return;
       var expr = el.getAttribute('data-show') || '';
       var stop = effect(function () { el.hidden = !evalExpr(scope, expr); });
       onCleanup(el, stop);
@@ -664,6 +702,7 @@
     Array.prototype.forEach.call(root.querySelectorAll('[data-if]'), function (node) {
       var el = /** @type {HTMLElement} */ (node);
       if (el.tagName === 'TEMPLATE') return;
+      if (claimed(el, 'if')) return;
       var expr = el.getAttribute('data-if') || '';
       var stop = effect(function () { el.hidden = !evalExpr(scope, expr); });
       onCleanup(el, stop);
@@ -671,6 +710,7 @@
     Array.prototype.forEach.call(root.querySelectorAll('template[data-if]'), function (node) {
       var tpl = /** @type {HTMLTemplateElement} */ (node);
       var expr = tpl.getAttribute('data-if') || '';
+      if (claimed(tpl, 'tif')) return;
       var anchor = document.createComment('b-if');
       if (tpl.parentNode) tpl.parentNode.insertBefore(anchor, tpl);
       /** @type {any} */ var frag = null;
@@ -697,6 +737,7 @@
     Array.prototype.forEach.call(root.querySelectorAll('template[data-for]'), function (node) {
       var tpl = /** @type {HTMLTemplateElement} */ (node);
       var spec = tpl.getAttribute('data-for') || '';
+      if (claimed(tpl, 'tfor')) return;
       var mm = spec.match(/^\s*(\w+)(?:\s*,\s*(\w+))?\s+in\s+(.+)\s*$/);
       if (!mm) { if (DEV && typeof console !== 'undefined') console.warn('[laghu] bad data-for "' + spec + '"'); return; }
       var itemVar = mm[1]; var idxVar = mm[2]; var listExpr = mm[3];
@@ -765,6 +806,7 @@
     // actions: data-click + data-on:event(.prevent.stop.once)
     root.querySelectorAll('[data-click]').forEach(function (node) {
       var el = /** @type {HTMLElement} */ (node);
+      if (claimed(el, 'click')) return;
       var code = el.getAttribute('data-click') || '';
       var spec = el.getAttribute('data-trigger') || 'click';
       bindTrigger(el, spec, function () { execAction(scope, actions || {}, code); });
@@ -773,6 +815,7 @@
       var el = /** @type {HTMLElement} */ (node);
       Array.prototype.forEach.call(el.attributes || [], function (/** @type {Attr} */ a) {
         if (a.name.indexOf('data-on:') === 0) {
+          if (claimed(el, 'on:' + a.name)) return;
           var raw = a.name.slice('data-on:'.length);
           var parts = raw.split('.');
           var ev = parts[0];
@@ -792,12 +835,14 @@
     // data-init runs once as action
     root.querySelectorAll('[data-init]').forEach(function (node) {
       var el = /** @type {HTMLElement} */ (node);
+      if (claimed(el, 'init')) return;
       var code = el.getAttribute('data-init') || '';
       try { execAction(scope, actions || {}, code); } catch (e) {}
     });
     directives.forEach(function (fn, name) {
       root.querySelectorAll('[data-' + name + ']').forEach(function (node) {
         var el = /** @type {HTMLElement} */ (node);
+        if (claimed(el, 'dir:' + name)) return;
         try {
           var out = fn({ el: el, get: function () { return evalExpr(scope, el.getAttribute('data-' + name) || ''); }, effect: effect, scope: scope });
           if (typeof out === 'function') onCleanup(el, out);
@@ -817,6 +862,7 @@
       if (!url && !el.hasAttribute('data-get') && !el.hasAttribute('data-post') && !el.hasAttribute('data-put') && !el.hasAttribute('data-patch') && !el.hasAttribute('data-delete')) return;
       if (el.hasAttribute('data-method')) method = String(el.getAttribute('data-method') || method).toUpperCase();
       if (!method) method = 'GET';
+      if (claimed(el, 'fetch')) return;
       setupFetch(el, scope, method, url);
     });
   }
@@ -878,7 +924,7 @@
       }
     };
     setBusy(true);
-    var before = new CustomEvent('laghu:before-request', { cancelable: true, detail: { url: url, method: method } });
+    var before = new CustomEvent('laghu:before-request', { bubbles: true, cancelable: true, detail: { url: url, method: method } });
     if (!el.dispatchEvent(before)) { self._bInflight = false; setBusy(false); return; }
     /** @type {any} */
     var opts = { method: method, headers: { Accept: 'application/json, text/html' }, signal: ctrl ? ctrl.signal : undefined };
@@ -915,9 +961,9 @@
     var done = function () { self._bInflight = false; if (self._bReq === ctrl) self._bReq = null; setBusy(false); };
     fetch(url, opts).then(function (res) {
       done();
-      el.dispatchEvent(new CustomEvent('laghu:after-request', { detail: { status: res.status, url: url } }));
+      el.dispatchEvent(new CustomEvent('laghu:after-request', { bubbles: true, detail: { status: res.status, url: url } }));
       if (!res.ok) {
-        el.dispatchEvent(new CustomEvent('laghu:request-error', { detail: { status: res.status, url: url } }));
+        el.dispatchEvent(new CustomEvent('laghu:request-error', { bubbles: true, detail: { status: res.status, url: url } }));
         return;
       }
       var ct = res.headers.get('content-type') || '';
@@ -940,7 +986,7 @@
     }).catch(function (err) {
       done();
       if (err && err.name === 'AbortError') return;
-      el.dispatchEvent(new CustomEvent('laghu:request-error', { detail: { error: err } }));
+      el.dispatchEvent(new CustomEvent('laghu:request-error', { bubbles: true, detail: { error: err } }));
       if (DEV && typeof console !== 'undefined') console.error('[laghu] fetch', err);
     });
   }
@@ -995,19 +1041,19 @@
    */
   function swapHtml(target, html, swap, scope) {
     var s = String(swap || 'inner').toLowerCase();
-    if (s === 'none') { target.dispatchEvent(new CustomEvent('laghu:after-swap', { detail: { swap: s } })); return; }
+    if (s === 'none') { target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } })); return; }
     var focusId = document.activeElement && /** @type {any} */ (document.activeElement).id ? /** @type {any} */ (document.activeElement).id : null;
     var ae = /** @type {any} */ (document.activeElement);
     var selStart = ae && typeof ae.selectionStart === 'number' ? ae.selectionStart : -1;
     var selEnd = ae && typeof ae.selectionEnd === 'number' ? ae.selectionEnd : -1;
-    target.dispatchEvent(new CustomEvent('laghu:before-swap', { cancelable: false, detail: { swap: s } }));
+    target.dispatchEvent(new CustomEvent('laghu:before-swap', { bubbles: true, cancelable: false, detail: { swap: s } }));
     var isMorph = s.indexOf('morph') === 0;
     /** @type {any} */ var M = typeof window !== 'undefined' ? /** @type {any} */ (window).LaghuMorph : null;
     if (isMorph) {
       if (M && M.morph) {
         M.morph(target, sanitize(html), {});
         hydrate(target, scope, {});
-        target.dispatchEvent(new CustomEvent('laghu:after-swap', { detail: { swap: s } }));
+        target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } }));
         restoreFocus(focusId, selStart, selEnd);
         return;
       }
@@ -1053,7 +1099,7 @@
     });
     var root = s === 'outer' ? (target.parentNode instanceof Element ? target.parentNode : document.body) : target;
     hydrate(root, scope, {});
-    target.dispatchEvent(new CustomEvent('laghu:after-swap', { detail: { swap: s } }));
+    target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } }));
     restoreFocus(focusId, selStart, selEnd);
   }
   /**
