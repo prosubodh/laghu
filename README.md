@@ -10,22 +10,23 @@ whole idea: a light tool for pages that do not need a heavy framework.
 
 Contents:
 
-1. When to use laghu
-2. Quick start
-3. Core concepts
-4. HTML attribute reference
-5. JavaScript API reference
-6. Events reference
-7. Fetching data (JSON and HTML)
-8. The morph plugin
-9. Type safety without TypeScript
-10. Content Security Policy notes
-11. Loading flash and SEO notes
-12. File sizes
-13. Worked examples
-14. Checking your setup
-15. Troubleshooting
-16. Project files
+- [1. When to use laghu](#1-when-to-use-laghu)
+- [2. Quick start](#2-quick-start)
+- [3. Loading from a CDN](#3-loading-from-a-cdn)
+- [4. Core concepts](#4-core-concepts)
+- [5. HTML attribute reference](#5-html-attribute-reference)
+- [6. JavaScript API reference](#6-javascript-api-reference)
+- [7. Events reference](#7-events-reference)
+- [8. Fetching data (JSON and HTML)](#8-fetching-data-json-and-html)
+- [9. The morph plugin](#9-the-morph-plugin)
+- [10. Type safety without TypeScript](#10-type-safety-without-typescript)
+- [11. Content Security Policy notes](#11-content-security-policy-notes)
+- [12. Loading flash and SEO notes](#12-loading-flash-and-seo-notes)
+- [13. File sizes](#13-file-sizes)
+- [14. Worked examples](#14-worked-examples)
+- [15. Checking your setup](#15-checking-your-setup)
+- [16. Troubleshooting](#16-troubleshooting)
+- [17. Project files](#17-project-files)
 
 ## 1. When to use laghu
 
@@ -76,7 +77,38 @@ When the element connected, laghu made `{ count: 0 }` reactive,
 mapped `data-bind="count"` to the `strong` node, and attached the
 click handler. When state changes, only that `strong` node updates.
 
-## 3. Core concepts
+## 3. Loading from a CDN
+
+A direct GitHub link does not work as a script source. A page address
+like `github.com/.../blob/...` serves HTML, and
+`raw.githubusercontent.com` serves plain text, which browsers refuse
+to run as a script.
+
+Use jsDelivr instead. It serves GitHub files with the correct
+JavaScript content type:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/prosubodh/laghu@v1.0.0/dist/laghu.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/prosubodh/laghu@v1.0.0/dist/morph.min.js"></script>
+```
+
+Rules for production pages:
+
+- Always pin a version (`@v1.0.0`). Never use `@master`, because
+  branch content moves and caches shift under you.
+- When a new laghu release comes out, move the version number
+  forward deliberately after testing.
+- For extra safety, add a Subresource Integrity hash to the tag so
+  the browser rejects a changed file.
+- For local development with no internet, download the two files
+  next to your HTML and reference them relatively:
+  `<script src="laghu.min.js"></script>`.
+
+Long term, publishing the `laghu` package to npm (the name is free
+at the time of writing) unlocks versioned CDN paths such as
+`cdn.jsdelivr.net/npm/laghu@1.0.0/...` plus automated update tools.
+
+## 4. Core concepts
 
 State is a plain object. Actions are plain functions that run with
 the state as `this`. Bindings are HTML attributes that connect state
@@ -100,7 +132,7 @@ element. Removing nodes, swapping HTML, or disconnecting a component
 stops effects, detaches listeners, clears timers and observers, and
 aborts in-flight fetches.
 
-## 4. HTML attribute reference
+## 5. HTML attribute reference
 
 ### data-scope
 
@@ -245,7 +277,7 @@ about a hundred items.
 Runs an action on click. Forms, in order: a state helper
 (`count++`, `count--`, `path = expr`), a named action
 (`increment` or `increment()`), or any expression resolving to a
-function. Accepts `data-trigger` modifiers (see section 7).
+function. Accepts `data-trigger` modifiers (see section 5).
 
 ```html
 <button data-click="increment">Add</button>
@@ -295,7 +327,7 @@ row scope or kicking off a load.
 ### data-get, data-post, data-put, data-patch, data-delete
 
 Declarative fetch. The attribute value is the URL. `data-method`
-overrides the method. See section 7 for the full fetch guide.
+overrides the method. See section 8 for the full fetch guide.
 
 ```html
 <button data-get="/api/user" data-target="#out">Load</button>
@@ -368,7 +400,7 @@ third-party widgets, and local state.
 
 Morph plugin only. Freezes a subtree during morph swaps.
 
-## 5. JavaScript API reference
+## 6. JavaScript API reference
 
 All methods live on `window.Laghu`.
 
@@ -439,7 +471,7 @@ testing and custom wiring.
 
 ### Laghu.swap(target, html, mode, scope)
 
-Swaps HTML and hydrates the result. See modes in section 4.
+Swaps HTML and hydrates the result. See modes in section 5.
 Dispatches `laghu:before-swap` and `laghu:after-swap`, preserves
 `data-preserve` nodes, restores focus and caret.
 
@@ -501,7 +533,7 @@ From morph.js (load after laghu.js). Reconciles instead of
 replacing. `opts.mode` is `inner` (default) or `outer`.
 `LaghuMorph.morphEl(a, b)` reconciles two elements directly.
 
-## 6. Events reference
+## 7. Events reference
 
 All names are CustomEvents. Listen with `addEventListener`:
 
@@ -517,7 +549,7 @@ All names are CustomEvents. Listen with `addEventListener`:
 - `laghu:poll`, `laghu:load`, `laghu:revealed`: synthetic trigger
   events passed to interval, load, and reveal handlers.
 
-## 7. Fetching data (JSON and HTML)
+## 8. Fetching data (JSON and HTML)
 
 laghu has one rule: JSON merges into state, HTML swaps into the DOM.
 
@@ -559,7 +591,7 @@ document.querySelector('#del').addEventListener('laghu:before-request', function
 });
 ```
 
-## 8. The morph plugin
+## 9. The morph plugin
 
 Default swaps replace nodes. Replacement loses input focus, caret,
 scroll position, video playback, and component instances inside the
@@ -590,7 +622,7 @@ and falls back to a plain inner swap.
 Use morph for server-fed lists and tables. Keep destructive swaps
 for one-shot content where replacement is cheaper and simpler.
 
-## 9. Type safety without TypeScript
+## 10. Type safety without TypeScript
 
 laghu ships type checking with zero build output. Every source file
 starts with `// @ts-check`, and editors run the TypeScript language
@@ -615,7 +647,7 @@ names in one registry object and test the fixtures.
 
 Library consumers get `dist/laghu.d.ts` with full signatures.
 
-## 10. Content Security Policy notes
+## 11. Content Security Policy notes
 
 laghu runs under strict CSP with no `unsafe-eval` and no
 `unsafe-inline`:
@@ -630,7 +662,7 @@ laghu runs under strict CSP with no `unsafe-eval` and no
 - `data-html` and swaps accept HTML by design. Point
   `Laghu.sanitize` at DOMPurify when content comes from a server.
 
-## 11. Loading flash and SEO notes
+## 12. Loading flash and SEO notes
 
 Empty custom tags render as unknown inline elements until the script
 registers them. Two fixes, best used together:
@@ -648,7 +680,7 @@ carries a ready-made version of this rule. Pre-rendered Light DOM
 also solves SEO: crawlers and readers see content even when scripts
 never run.
 
-## 12. File sizes
+## 13. File sizes
 
 Measured after minification:
 
@@ -660,7 +692,7 @@ Measured after minification:
 For scale: htmx alone is about 16kB gzip, Alpine with a few plugins
 is 12 to 15kB. laghu core plus morph stays under half of either.
 
-## 13. Worked examples
+## 14. Worked examples
 
 See the `examples/` folder. Each file opens directly from disk.
 
@@ -670,7 +702,7 @@ See the `examples/` folder. Each file opens directly from disk.
 - `fetch.html`: JSON button plus morph list swap (needs a server
   for the URLs, or swap in the stub URLs for local JSON files).
 
-## 14. Checking your setup
+## 15. Checking your setup
 
 ```sh
 npm install
@@ -684,7 +716,7 @@ conditionals, keyed reorder reuse, two-way inputs, attribute sync,
 triggers, JSON merge, all swap modes, morph focus preservation,
 stores, directives with cleanup, and unknown-action warnings.
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 Unknown action warning: the `data-click` or `data-on` name matches
 no action and no state function. Check spelling, or add the action
@@ -713,7 +745,7 @@ Request never fires with `changed`: the input value never differed.
 morph warns and falls back: `morph.min.js` is not loaded. Add the
 script tag after the core.
 
-## 16. Project files
+## 17. Project files
 
 - `src/laghu.js`: core source with full JSDoc, loaded directly in
   development.
