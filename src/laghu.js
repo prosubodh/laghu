@@ -32,6 +32,10 @@
   var directives = new Map();
   /** @type {WeakMap<object, Map<string, Set<Function>>>} */
   var targetMap = new WeakMap();
+  /** Proxies created by reactive, so re-wrapping returns the same proxy
+   * instead of stacking proxy-on-proxy traps. */
+  /** @type {WeakSet<object>} */
+  var seenReactive = new WeakSet();
   /** @type {Function | null} */
   var activeEffect = null;
   /** @type {Set<Function>} */
@@ -101,6 +105,34 @@
   }
   /** @param {any} v @returns {boolean} */
   function isObj(v) { return v !== null && typeof v === 'object'; }
+  /**
+   * Make a child scope that inherits a parent while owning the given
+   * variables. Uses defineProperty because plain assignment on an
+   * object whose prototype is a reactive Proxy would route into the
+   * proxy set trap and write the parent instead of the child.
+   *
+   * @example
+   * var row = childScope(state, { c: item, i: 0 });
+   * row.c; // item, owned by row, parent untouched
+   *
+   * @param {any} scope Parent scope on the prototype chain.
+   * @param {Record<string, any>} vars Variables owned by the child.
+   * @returns {any} Child scope.
+   */
+  function childScope(scope, vars) {
+    var o = Object.create(scope);
+    for (var k in vars) {
+      if (Object.prototype.hasOwnProperty.call(vars, k)) {
+        Object.defineProperty(o, k, {
+          value: vars[k],
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      }
+    }
+    return o;
+  }
   /**
    * Read a dotted path from a scope, walking the prototype chain for the
    * first segment (so child scopes inherit parent values). Returns
@@ -195,12 +227,16 @@
    * state.user.name = 'Grace'; // triggers effects that read user or user.name
    * state.tags.push('x');      // triggers effects that read tags or length
    *
+   * Idempotent: passing an already reactive object returns it as is
+   * instead of stacking proxy on proxy.
+   *
    * @param {object} obj Plain object or array to make reactive.
    * @returns {any} Reactive proxy around the same data.
    */
   function reactive(obj) {
     if (!isObj(obj)) return obj;
-    return new Proxy(obj, {
+    if (seenReactive.has(obj)) return obj;
+    var proxy = new Proxy(obj, {
       get: function (t, p, r) {
         if (typeof p === 'string') track(t, p);
         var v = Reflect.get(t, p, r);
@@ -218,6 +254,8 @@
         return ok;
       }
     });
+    seenReactive.add(proxy);
+    return proxy;
   }
   /** @param {string} s @param {string} op @returns {string[]} */
   function splitTop(s, op) {
@@ -570,7 +608,8 @@
    * data-html (innerHTML through the sanitize hook), data-bind:attr,
    * data-class:name, data-style:prop, data-model (two-way form binding),
    * data-show and data-if (hidden toggle on elements, real attach and
-   * detach on template tags), template data-for lists with data-key,
+   * detach on template tags), template data-for lists with item-relative
+   * data-key (rows keyed by item property, stable across reorder),
    * data-click, data-on:event with .prevent .stop .once, data-init,
    * custom directives, and data-get/post/put/patch/delete fetch blocks.
    *
@@ -755,41 +794,77 @@
         var order = [];
         for (var i = 0; i < list.length; i++) {
           var item = list[i];
-          var tmpScope = Object.assign(Object.create(scope), {});
-          tmpScope[itemVar] = item;
-          var key = keyExpr ? evalExpr(tmpScope, keyExpr) : i;
-          if (key === undefined || key === null) key = i;
+          // data-key names a property of the item itself ("id"), with a
+          // scope lookup fallback, then the index. Item-relative keys
+          // keep rows stable across reorder; index keys only append.
+          /** @type {any} */
+          var key = i;
+          if (keyExpr) {
+            var ki = evalExpr(item, keyExpr);
+            if (ki === undefined || ki === null) {
+              /** @type {Record<string, any>} */
+              var tmpVars = {};
+              tmpVars[itemVar] = item;
+              ki = evalExpr(childScope(scope, tmpVars), keyExpr);
+            }
+            if (ki !== undefined && ki !== null) key = ki;
+          }
           seen.add(key);
           order.push(key);
           var row = rows.get(key);
           if (!row) {
-            var rs = Object.create(scope);
-            rs[itemVar] = item;
-            if (idxVar) rs[idxVar] = i;
+            /** @type {Record<string, any>} */
+            var rsVars = {};
+            rsVars[itemVar] = item;
+            if (idxVar) rsVars[idxVar] = i;
+            var rs = childScope(scope, rsVars);
             var f = /** @type {DocumentFragment} */ (tpl.content.cloneNode(true));
             var holder = document.createElement('span');
             holder.style.display = 'contents';
-            if (keyExpr) holder.setAttribute('data-bkey', String(key));
+            holder.setAttribute('data-bkey', String(key));
             holder.appendChild(f);
             parent.insertBefore(holder, anchor);
             hydrate(holder, rs, actions);
             rows.set(key, { nodes: [holder], scope: rs });
           } else {
+            // Same key, possibly new identity (replaced array) or new
+            // index (reorder). Same refs update nothing: fine-grained
+            // bindings already show the mutation. New identity rebinds
+            // the row so effects read the new objects; reorder alone
+            // only moves nodes and keeps focus.
+            var prevItem = row.scope[itemVar];
+            var prevIdx = idxVar ? row.scope[idxVar] : -1;
             row.scope[itemVar] = item;
             if (idxVar) row.scope[idxVar] = i;
+            if (prevItem !== item || (idxVar && prevIdx !== i)) {
+              var h0 = row.nodes[0];
+              if (h0 instanceof Element) { destroyTree(h0); hydrate(h0, row.scope, actions); }
+            }
           }
         }
-        // reorder without destroy (preserves focus/input): iterate desired order
-        for (var k = 0; k < order.length; k++) {
-          var r2 = rows.get(order[k]);
-          if (r2) {
-            var h2 = /** @type {HTMLElement} */ (r2.nodes[0]);
-            var want = anchor;
-            // find reference: next desired sibling already placed? simplest: insert each in order before anchor sequentially = stable
-            if (h2.nextSibling !== want || true) parent.insertBefore(h2, want);
+        // Move holders only when DOM order differs from desired order.
+        // Spurious moves report as remove+add to MutationObserver, which
+        // would strip the moved rows' bindings, so never move blindly.
+        var seq = [];
+        var chn = parent.childNodes;
+        for (var q = 0; q < chn.length; q++) {
+          var hn = chn[q];
+          if (hn.nodeType === 1 && /** @type {Element} */ (hn).hasAttribute('data-bkey')) {
+            seq.push(/** @type {Element} */ (hn).getAttribute('data-bkey'));
           }
         }
-        // fix order: the loop inserts each holder before the anchor in sequence
+        var sameOrder = seq.length === order.length;
+        if (sameOrder) {
+          for (var q2 = 0; q2 < order.length; q2++) {
+            if (seq[q2] !== String(order[q2])) { sameOrder = false; break; }
+          }
+        }
+        if (!sameOrder) {
+          for (var k = 0; k < order.length; k++) {
+            var r2 = rows.get(order[k]);
+            if (r2) parent.insertBefore(/** @type {HTMLElement} */ (r2.nodes[0]), anchor);
+          }
+        }
         rows.forEach(function (row2, kk) {
           if (!seen.has(kk)) {
             row2.nodes.forEach(function (nn) {
@@ -825,7 +900,7 @@
           bindTrigger(el, spec, function (/** @type {Event} */ e) {
             if (mods.indexOf('prevent') >= 0) e.preventDefault();
             if (mods.indexOf('stop') >= 0) e.stopPropagation();
-            var s2 = Object.create(scope); s2.$event = e;
+            var s2 = childScope(scope, { $event: e });
             execAction(s2, actions || {}, code);
             if (mods.indexOf('once') >= 0) { try { /** @type {any} */ (el).removeAttribute(a.name); } catch (err) {} }
           });
@@ -1227,6 +1302,12 @@
   function autoObserve() {
     if (observer || typeof MutationObserver === 'undefined') return;
     observer = new MutationObserver(function (muts) {
+      // Nodes moved within one batch appear in both added and removed.
+      // Moving must preserve bindings, so only truly removed nodes die.
+      var added = new Set();
+      muts.forEach(function (m) {
+        m.addedNodes.forEach(function (n) { if (n instanceof Element) added.add(n); });
+      });
       muts.forEach(function (m) {
         m.addedNodes.forEach(function (n) {
           if (n instanceof Element) {
@@ -1238,7 +1319,7 @@
             }
           }
         });
-        m.removedNodes.forEach(function (n) { if (n instanceof Element) destroyTree(n); });
+        m.removedNodes.forEach(function (n) { if (n instanceof Element && !added.has(n)) destroyTree(n); });
       });
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });

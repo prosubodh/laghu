@@ -1,0 +1,6 @@
+body { font-family: system-ui, sans-serif; max-width: 320px; margin: 24px auto; }
+.board { display: grid; grid-template-columns: repeat(3, 96px); gap: 8px; }
+.cell { width: 96px; height: 96px; font-size: 40px; cursor: pointer; }
+.cell.win { background: #b7f0b7; }
+#status { font-weight: bold; min-height: 1.5em; }
+#score { color: #444; }

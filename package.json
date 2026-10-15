@@ -31,7 +31,7 @@
   "homepage": "https://github.com/prosubodh/laghu#readme",
   "scripts": {
     "check": "tsc --noEmit -p jsconfig.json",
-    "test": "node test/run.mjs && node test/examples.mjs",
+    "test": "node test/run.mjs && node test/examples.mjs && node test/apps.mjs",
     "size": "node scripts/size.mjs",
     "prepublishOnly": "npm run check && npm run test && npm run size"
   },
