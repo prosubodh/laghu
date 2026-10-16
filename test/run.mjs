@@ -191,5 +191,189 @@ function boot(html, dev = false) {
   ok('directive cleanup', cleaned === 1, String(cleaned));
 }
 
+// 7 security regressions + hardening
+{
+  const B = boot(`<div data-scope='{"body":"","url":"/x"}'><div id="h" data-html="body"></div><a id="lk" data-bind:href="url">x</a></div>`);
+  const root = document.querySelector('[data-scope]');
+  const state = B.hydrate(root, { body: '', url: '/x' });
+  await tick();
+  state.body = '<img src=x onerror=alert(1)><script>alert(2)</script><p>safe</p>';
+  await tick();
+  const h = document.querySelector('#h');
+  ok('sanitize strips scripts', h.querySelector('script') === null);
+  ok('sanitize strips event handlers', h.innerHTML.indexOf('onerror') === -1 && h.textContent.includes('safe'));
+  state.url = 'JaVaScRiPt:alert(1)';
+  await tick();
+  ok('scriptable href refused', !document.querySelector('#lk').hasAttribute('href'));
+  state.url = '/ok';
+  await tick();
+  ok('plain href passes', document.querySelector('#lk').getAttribute('href') === '/ok');
+  B.set({}, '__proto__.pwned', 1);
+  ok('setPath blocks proto', ({}).pwned === undefined);
+  ok('getPath blocks constructor', B.get({ a: 1 }, 'constructor.name') === undefined);
+  const errs = [];
+  document.addEventListener('laghu:error', (e) => errs.push(e.detail));
+  const root2 = document.createElement('div');
+  root2.innerHTML = '<button id="evil" data-click="__proto__.x = 1">x</button>';
+  document.body.appendChild(root2);
+  B.hydrate(root2, {}, {});
+  document.querySelector('#evil').click();
+  await tick();
+  ok('action assign blocks proto', ({}).x === undefined);
+  // one throwing binding must not kill the page
+  const root3 = document.createElement('div');
+  root3.innerHTML = '<span id="boom" data-bind="explodes"></span><button id="alive" data-click="n++">go</button>';
+  document.body.appendChild(root3);
+  const raw3 = { n: 0 };
+  Object.defineProperty(raw3, 'explodes', { get() { throw new Error('boom'); } });
+  const s3 = B.hydrate(root3, raw3, {});
+  await tick();
+  document.querySelector('#alive').click();
+  await tick();
+  ok('throwing binding isolated', s3.n === 1);
+  ok('binding error reported', errs.length >= 1);
+  // swapped content keeps actions; morph:outer replaces
+  const root4 = document.createElement('div');
+  root4.innerHTML = '<div id="t4"></div>';
+  document.body.appendChild(root4);
+  const s4 = { n: 0 };
+  const acts = { inc() { this.n++; } };
+  B.swap(document.querySelector('#t4'), '<button id="b4" data-click="inc">go</button>', 'inner', s4, acts);
+  await tick();
+  document.querySelector('#b4').click();
+  await tick();
+  ok('swapped actions survive', s4.n === 1, String(s4.n));
+  const tgt = document.createElement('div');
+  tgt.innerHTML = '<p id="old">x</p>';
+  document.body.appendChild(tgt);
+  const holder = tgt.querySelector('#old');
+  B.swap(holder, '<section id="new2">y</section>', 'morph:outer', {});
+  await tick();
+  ok('morph outer replaces', !document.body.contains(holder) && document.querySelector('#new2') !== null);
+  // effect unsubscribe actually unsubscribes
+  const st = B.reactive({ v: 0 });
+  let runs = 0;
+  const stop = B.effect(() => { runs++; return st.v; });
+  const r0 = runs;
+  stop();
+  st.v = 99;
+  await tick(20);
+  ok('effect stop unsubscribes', runs === r0, runs + ' vs ' + r0);
+  // fetch: timeout, GET arrays, +json
+  let seenUrl = '';
+  let abortFired = false;
+  global.fetch = async (url, opts) => {
+    seenUrl = String(url);
+    if (String(url).includes('/slow')) {
+      return new Promise((res, rej) => {
+        if (opts && opts.signal) {
+          opts.signal.addEventListener('abort', () => { abortFired = true; const e = new Error('aborted'); e.name = 'AbortError'; rej(e); });
+        }
+      });
+    }
+    if (String(url).includes('/j')) {
+      return { ok: true, status: 200, headers: { get: () => 'application/hal+json' }, json: async () => ({ got: 1 }) };
+    }
+    return { ok: false, status: 500, headers: { get: () => '' } };
+  };
+  window.fetch = global.fetch;
+  const root5 = document.createElement('div');
+  root5.innerHTML = '<button id="g" data-get="/arr" data-vals=\'{"a":[1,2],"b":"x"}\'>go</button><button id="s5" data-get="/slow" data-timeout="30">slow</button><button id="j" data-get="/j">j</button>';
+  document.body.appendChild(root5);
+  const s5 = B.hydrate(root5, {}, {});
+  let te = null;
+  document.addEventListener('laghu:request-error', (e) => { te = e.detail; });
+  document.querySelector('#g').click();
+  await tick(20);
+  ok('GET arrays repeat params', seenUrl.includes('a=1') && seenUrl.includes('a=2') && seenUrl.includes('b=x'), seenUrl);
+  document.querySelector('#j').click();
+  await tick(20);
+  ok('+json merges', s5.got === 1, String(s5.got));
+  document.querySelector('#s5').click();
+  await tick(80);
+  ok('timeout aborts and reports', abortFired && te && te.timeout === true);
+  // onUnmount invoked
+  let unmounted = 0;
+  B.define('life-tag', () => ({ state: {}, actions: {}, onUnmount() { unmounted++; } }));
+  const lt = document.createElement('life-tag');
+  document.body.appendChild(lt);
+  await tick(20);
+  lt.remove();
+  await tick(20);
+  ok('onUnmount runs', unmounted === 1, String(unmounted));
+  // DEV off by default: event fires, console stays quiet. Last boot in
+  // the file on purpose: boot() reassigns the shared globals.
+  const B2 = boot(`<div><button id="q" data-click="missing-thing">x</button></div>`);
+  let w = 0;
+  const ow = console.warn;
+  console.warn = () => { w++; };
+  let ue = null;
+  document.addEventListener('laghu:unknown-action', (e) => { ue = e.detail; });
+  B2.hydrate(document.querySelector('div'), {}, {});
+  document.querySelector('#q').click();
+  await tick();
+  console.warn = ow;
+  ok('prod quiet but loud event', w === 0 && ue && ue.name === 'missing-thing');
+}
+
+// 8 expressions, computed, watch, persist, pending tri-state
+{
+  const B = boot(`<div data-scope='{"price":3,"qty":4,"open":false}'><span id="t" data-bind="price * qty"></span><span id="w" data-bind="open ? 'yes' : 'no'"></span></div>`);
+  ok('eval arithmetic', B.eval({ a: 2, b: 3 }, 'a * b + 1') === 7);
+  ok('eval ternary', B.eval({ t: 0 }, 't ? "y" : "n"') === 'n');
+  ok('eval args', B.eval({ add(x, y) { return x + y; } }, 'add(2, 3)') === 5);
+  ok('eval index', B.eval({ l: [7, 8] }, 'l[1]') === 8);
+  ok('eval gadget blocked', B.eval({}, 'add(1)') === undefined);
+  const root = document.querySelector('[data-scope]');
+  const state = B.hydrate(root, { price: 3, qty: 4, open: false });
+  await tick();
+  ok('bind arithmetic', document.querySelector('#t').textContent === '12');
+  ok('bind ternary', document.querySelector('#w').textContent === 'no');
+  state.qty = 5;
+  await tick();
+  ok('bind arithmetic updates', document.querySelector('#t').textContent === '15');
+  const dbl = B.computed(() => state.price * state.qty);
+  let shown = '';
+  B.effect(() => { shown = String(dbl()); });
+  await tick();
+  ok('computed fresh', shown === '15', shown);
+  state.price = 10;
+  await tick();
+  ok('computed recomputes', shown === '50', shown);
+  const seen = [];
+  B.watch(state, 'qty', (n, o) => seen.push([n, o]));
+  state.qty = 5;
+  await tick();
+  state.qty = 6;
+  await tick();
+  ok('watch reports transitions', JSON.stringify(seen) === '[[6,5]]', JSON.stringify(seen));
+  B.store('pz', { n: 1 });
+  B.persist('pz', { key: 'laghu:test-pz', version: 1, debounce: 10 });
+  B.store('pz').n = 42;
+  await tick(60);
+  ok('persist writes storage', (window.localStorage.getItem('laghu:test-pz') || '').includes('42'));
+  B.store('pz2', { n: 0 });
+  window.localStorage.setItem('laghu:test-pz2', JSON.stringify({ v: 1, state: { n: 9 } }));
+  B.persist('pz2', { key: 'laghu:test-pz2', version: 1, debounce: 10 });
+  ok('persist restores', B.store('pz2').n === 9);
+  // pending tri-state + $error
+  let release;
+  const gate = new Promise((res) => { release = res; });
+  global.fetch = () => gate;
+  window.fetch = global.fetch;
+  const root2 = document.createElement('div');
+  root2.innerHTML = '<button id="pb" data-get="/x">go</button><span id="pe" data-bind="$error.status"></span>';
+  document.body.appendChild(root2);
+  const s2 = B.hydrate(root2, {}, {});
+  const b2 = document.querySelector('#pb');
+  b2.click();
+  ok('pending flag during flight', b2.hasAttribute('data-pending'));
+  release({ ok: false, status: 503, headers: { get: () => '' } });
+  await tick(30);
+  ok('error state set', s2.$error && s2.$error.status === 503, JSON.stringify(s2.$error));
+  ok('pending flag cleared', !b2.hasAttribute('data-pending'));
+  ok('error binding renders', document.querySelector('#pe').textContent === '503');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -23,8 +23,10 @@
  */
 (function () {
   'use strict';
-  var VERSION = '1.0.0';
-  var DEV = typeof window !== 'undefined' && /** @type {any} */ (window).__LAGHU_DEV__ !== false;
+  var VERSION = '1.1.0';
+  // Opt-in dev noise. Production stays silent unless handlers listen
+  // for laghu:error / laghu:request-error, which always dispatch.
+  var DEV = typeof window !== 'undefined' && /** @type {any} */ (window).__LAGHU_DEV__ === true;
 
   /** @type {Map<string, any>} */
   var stores = new Map();
@@ -34,22 +36,76 @@
   var targetMap = new WeakMap();
   /** Proxies created by reactive, so re-wrapping returns the same proxy
    * instead of stacking proxy-on-proxy traps. */
+  /** @type {WeakMap<object, any>} */
+  var proxyCache = new WeakMap();
   /** @type {WeakSet<object>} */
-  var seenReactive = new WeakSet();
+  var proxySet = new WeakSet();
   /** @type {Function | null} */
   var activeEffect = null;
   /** @type {Set<Function>} */
   var jobQueue = new Set();
   var flushing = false;
+  /** Attributes whose values can navigate or load code: scriptable
+   * URLs are refused here (baseline; DOMPurify for untrusted input). */
+  /** @type {Record<string, number>} */
+  var URL_ATTRS = { href: 1, src: 1, action: 1, formaction: 1, cite: 1, poster: 1, data: 1, srcset: 1, srcdoc: 1 };
+  /** Path segments that must never be read or written: prototype
+   * pollution sinks and callable gadgets (constructor, toString).
+   * @param {string} seg */
+  function badSeg(seg) {
+    return seg === '__proto__' || seg === 'constructor' || seg === 'prototype';
+  }
+  /** True for URL values that execute code (checked case-insensitively,
+   * whitespace-insensitively, so casing tricks do not slip through).
+   * @param {any} v */
+  function unsafeUrl(v) {
+    var s = String(v).replace(/[\s\x00-\x1f]+/g, '').toLowerCase();
+    return s.indexOf('javascript:') === 0 || s.indexOf('data:text/html') === 0 || s.indexOf('vbscript:') === 0;
+  }
+  /**
+   * Baseline HTML cleaner used when no sanitizer is installed. Strips
+   * scripts, frames, event-handler attributes, and scriptable URLs.
+   * This is a floor, not a policy: pair with DOMPurify through
+   * Laghu.sanitize for untrusted content.
+   * @param {any} html
+   * @returns {string}
+   */
+  function defaultSanitize(html) {
+    var s = String(html);
+    s = s.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, '');
+    s = s.replace(/<\/?(iframe|object|embed|link|meta|base)[^>]*>/gi, '');
+    s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    s = s.replace(/(href|src|xlink:href|action|formaction|poster|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, function (m, a, q, d1, d2, d3) {
+      var v = d1 !== undefined ? d1 : (d2 !== undefined ? d2 : d3);
+      if (unsafeUrl(v)) return a + '="#"';
+      return m;
+    });
+    return s;
+  }
   /** @type {(html: string) => string} */
-  var sanitize = function (h) { return h; };
+  var sanitize = defaultSanitize;
 
+  /**
+   * Report a runtime failure. Always dispatches laghu:error on document
+   * (so production has signal without console noise); logs only in dev.
+   * @param {any} err
+   */
+  function reportError(err) {
+    try {
+      if (typeof document !== 'undefined' && document.dispatchEvent) {
+        document.dispatchEvent(new CustomEvent('laghu:error', {
+          detail: { error: String((err && err.message) || err), version: VERSION }
+        }));
+      }
+    } catch (e) {}
+    if (DEV && typeof console !== 'undefined') console.error('[laghu]', err);
+  }
   function flush() {
     flushing = false;
     var jobs = Array.from(jobQueue);
     jobQueue.clear();
     for (var i = 0; i < jobs.length; i++) {
-      try { jobs[i](); } catch (e) { if (DEV && typeof console !== 'undefined') console.error('[laghu]', e); }
+      try { jobs[i](); } catch (e) { reportError(e); }
     }
   }
   /** @param {Function} fn */
@@ -57,13 +113,18 @@
     jobQueue.add(fn);
     if (!flushing) { flushing = true; Promise.resolve().then(flush); }
   }
+  /** Nesting stack so inner effects never clobber outer dependencies. @type {Array<Function>} */
+  var effectStack = [];
+  /** @type {WeakMap<Function, Array<Set<Function>>>} */
+  var runDeps = new WeakMap();
   /**
    * Run a function now and re-run it whenever reactive state it read
    * changes. Each DOM binding creates one effect, so updates touch only
    * the exact node that depends on the changed value.
    *
    * Effects are batched in a microtask: many synchronous writes cause
-   * one re-run.
+   * one re-run. A throwing run reports laghu:error and keeps the page
+   * alive; subscriptions refresh per run so untaken branches release.
    *
    * @example
    * var state = Laghu.reactive({ count: 0 });
@@ -78,13 +139,30 @@
    */
   function effect(fn) {
     var stopped = false;
+    /** @type {Array<Set<Function>>} */
+    var deps = [];
     var run = function () {
       if (stopped) return;
+      // Drop last run's subscriptions first: conditional branches
+      // (a ? b : c) must not keep firing on the untaken path.
+      for (var i = 0; i < deps.length; i++) deps[i].delete(run);
+      deps.length = 0;
+      effectStack.push(run);
       activeEffect = run;
-      try { fn(); } finally { activeEffect = null; }
+      runDeps.set(run, deps);
+      try { fn(); }
+      catch (e) { reportError(e); }
+      finally {
+        effectStack.pop();
+        activeEffect = effectStack.length ? effectStack[effectStack.length - 1] : null;
+      }
     };
     run();
-    return function () { stopped = true; };
+    return function () {
+      stopped = true;
+      for (var i = 0; i < deps.length; i++) deps[i].delete(run);
+      deps.length = 0;
+    };
   }
   /** @param {object} t @param {string} k */
   function track(t, k) {
@@ -94,6 +172,8 @@
     var s = m.get(k);
     if (!s) { s = new Set(); m.set(k, s); }
     s.add(activeEffect);
+    var arr = runDeps.get(activeEffect);
+    if (arr) arr.push(s);
   }
   /** @param {object} t @param {string} k */
   function trigger(t, k) {
@@ -153,20 +233,28 @@
     if (!path) return undefined;
     var parts = String(path).split('.');
     var head = parts[0].trim();
+    if (badSeg(head)) return undefined;
     if (head === '$store') {
       var sn = parts[1];
       var st = stores.get(sn);
       if (!st) return undefined;
       var cur2 = st;
       for (var k = 2; k < parts.length; k++) {
+        if (badSeg(parts[k])) return undefined;
         if (!isObj(cur2)) return undefined;
         cur2 = cur2[parts[k]];
       }
       return cur2;
     }
-    if (!(head in Object(scope))) return undefined;
+    if (!(head in Object(scope))) {
+      // Track the miss so late-added keys (framework $error, user keys
+      // declared after first render) still wake this reader up.
+      if (typeof head === 'string' && isObj(scope)) track(scope, head);
+      return undefined;
+    }
     var cur = scope[head];
     for (var i = 1; i < parts.length; i++) {
+      if (badSeg(parts[i])) return undefined;
       if (!isObj(cur) && typeof cur !== 'function') return undefined;
       cur = cur[parts[i]];
     }
@@ -189,6 +277,12 @@
    */
   function setPath(scope, path, val) {
     var parts = String(path).split('.');
+    for (var g = 0; g < parts.length; g++) {
+      if (badSeg(parts[g].trim())) {
+        if (DEV && typeof console !== 'undefined') console.warn('[laghu] blocked unsafe path "' + path + '"');
+        return;
+      }
+    }
     if (parts[0].trim() === '$store') {
       var st = stores.get(parts[1]);
       if (!st) return;
@@ -235,7 +329,9 @@
    */
   function reactive(obj) {
     if (!isObj(obj)) return obj;
-    if (seenReactive.has(obj)) return obj;
+    if (proxySet.has(obj)) return obj;
+    var hit = proxyCache.get(obj);
+    if (hit) return hit;
     var proxy = new Proxy(obj, {
       get: function (t, p, r) {
         if (typeof p === 'string') track(t, p);
@@ -245,16 +341,27 @@
       set: function (/** @type {any} */ t, p, v) {
         var old = t[/** @type {string} */ (p)];
         var ok = Reflect.set(t, p, v);
-        if (old !== v && typeof p === 'string') trigger(t, p);
+        if (old !== v && typeof p === 'string') {
+          trigger(t, p);
+          // Miss-reads subscribe on the proxy itself (the raw target is
+          // unreachable from outside), so wake those subscribers too.
+          var px = proxyCache.get(t);
+          if (px) trigger(px, p);
+        }
         return ok;
       },
       deleteProperty: function (t, p) {
         var ok = Reflect.deleteProperty(t, p);
-        if (typeof p === 'string') trigger(t, p);
+        if (typeof p === 'string') {
+          trigger(t, p);
+          var px = proxyCache.get(t);
+          if (px) trigger(px, p);
+        }
         return ok;
       }
     });
-    seenReactive.add(proxy);
+    proxyCache.set(obj, proxy);
+    proxySet.add(proxy);
     return proxy;
   }
   /** @param {string} s @param {string} op @returns {string[]} */
@@ -264,8 +371,8 @@
       var c = s[i];
       if (q) { cur += c; if (c === q && s[i - 1] !== '\\') q = null; continue; }
       if (c === '"' || c === "'") { q = c; cur += c; continue; }
-      if (c === '(') depth++;
-      if (c === ')') depth--;
+      if (c === '(' || c === '[') depth++;
+      if (c === ')' || c === ']') depth--;
       if (depth === 0 && s.slice(i, i + op.length) === op) { out.push(cur); cur = ''; i += op.length - 1; continue; }
       cur += c;
     }
@@ -273,18 +380,68 @@
     return out;
   }
   /**
+   * Find the last top-level operator char outside quotes and parens.
+   * Position 0 never counts, so leading signs stay unary.
+   * @param {string} s @param {string} chars
+   * @returns {number} Index, or -1 when absent.
+   */
+  function lastTopOp(s, chars) {
+    var depth = 0, q = null;
+    for (var i = s.length - 1; i > 0; i--) {
+      var c = s[i];
+      if (q) { if (c === q && s[i - 1] !== '\\') q = null; continue; }
+      if (c === '"' || c === "'") { q = c; continue; }
+      if (c === ')') depth++;
+      if (c === '(') depth--;
+      if (depth === 0 && chars.indexOf(c) >= 0) return i;
+    }
+    return -1;
+  }
+  /**
+   * Split a ternary at its top-level ? and :. Returns null when the
+   * string holds no top-level question mark.
+   * @param {string} s
+   * @returns {Array<string>|null} [cond, yes, no] or null.
+   */
+  function splitTernary(s) {
+    var depth = 0, q = null, qi = -1;
+    var i;
+    for (i = 0; i < s.length; i++) {
+      var c = s[i];
+      if (q) { if (c === q && s[i - 1] !== '\\') q = null; continue; }
+      if (c === '"' || c === "'") { q = c; continue; }
+      if (c === '(' || c === '[') depth++;
+      if (c === ')' || c === ']') depth--;
+      if (c === '?' && depth === 0) { qi = i; break; }
+    }
+    if (qi < 0) return null;
+    depth = 0; q = null;
+    for (i = qi + 1; i < s.length; i++) {
+      var d = s[i];
+      if (q) { if (d === q && s[i - 1] !== '\\') q = null; continue; }
+      if (d === '"' || d === "'") { q = d; continue; }
+      if (d === '(' || d === '[') depth++;
+      if (d === ')' || d === ']') depth--;
+      if (d === ':' && depth === 0) return [s.slice(0, qi), s.slice(qi + 1, i), s.slice(i + 1)];
+    }
+    return null;
+  }
+  /**
    * Evaluate a small expression against a scope without new Function,
    * so it runs under strict Content Security Policy.
    *
-   * Supported: dotted paths, string/number/true/false/null literals,
-   * not (!), comparisons (>, <, >=, <=, ==, !=, ===, !==),
-   * and/or (&&, ||), and no-argument calls such as "reset()".
+   * Supported: dotted paths, bracket indexes (list[0], map["key"]),
+   * string/number/true/false/null literals, not (!), arithmetic
+   * (+ - * / %), comparisons, and/or (&&, ||), ternary (a ? b : c),
+   * and calls with evaluated arguments such as "total(qty)".
    * Anything else returns undefined. Unknown method names warn in dev.
    *
    * @example
    * Laghu.eval({ count: 6 }, 'count > 5');       // true
    * Laghu.eval({ user: { name: 'Ada' } }, 'user.name'); // 'Ada'
    * Laghu.eval({ open: false }, '!open');         // true
+   * Laghu.eval({ price: 3, qty: 4 }, 'price * qty'); // 12
+   * Laghu.eval({ t: 1 }, 't > 0 ? "up" : "down"');  // 'up'
    *
    * @param {any} scope Scope to resolve paths and methods against.
    * @param {string} expr Expression text from a data-* attribute.
@@ -293,6 +450,8 @@
   function evalExpr(scope, expr) {
     var s = String(expr).trim();
     if (!s) return undefined;
+    var ter0 = splitTernary(s);
+    if (ter0) return evalExpr(scope, ter0[0]) ? evalExpr(scope, ter0[1]) : evalExpr(scope, ter0[2]);
     var or = splitTop(s, '||');
     if (or.length > 1) {
       var r;
@@ -317,19 +476,83 @@
       if (op === '===') return L === R;
       return L !== R;
     }
+    var ai = lastTopOp(s, '+-');
+    if (ai > 0 && s.slice(0, ai).trim() && s.slice(ai + 1).trim()) {
+      var lop = s[ai];
+      /** @type {any} */ var la = evalExpr(scope, s.slice(0, ai));
+      /** @type {any} */ var ra = evalExpr(scope, s.slice(ai + 1));
+      return lop === '+' ? la + ra : la - ra;
+    }
+    var mi = lastTopOp(s, '*/%');
+    if (mi > 0 && s.slice(0, mi).trim() && s.slice(mi + 1).trim()) {
+      var mop = s[mi];
+      /** @type {any} */ var lm = evalExpr(scope, s.slice(0, mi));
+      /** @type {any} */ var rm = evalExpr(scope, s.slice(mi + 1));
+      if (mop === '*') return lm * rm;
+      if (mop === '/') return lm / rm;
+      return lm % rm;
+    }
     if (s[0] === '!') return !evalExpr(scope, s.slice(1));
+    if (s[0] === '-') return -evalExpr(scope, s.slice(1));
+    // parenthesized group: (a + b) * c. Only when the first paren
+    // matches the final char, so calls fall through below.
+    if (s[0] === '(') {
+      var gd = 0, gq = null, gm = -1, gi;
+      for (gi = 0; gi < s.length; gi++) {
+        var gc = s[gi];
+        if (gq) { if (gc === gq && s[gi - 1] !== '\\') gq = null; continue; }
+        if (gc === '"' || gc === "'") { gq = gc; continue; }
+        if (gc === '(') gd++;
+        if (gc === ')') { gd--; if (gd === 0) { gm = gi; break; } }
+      }
+      if (gm === s.length - 1) return evalExpr(scope, s.slice(1, -1));
+    }
     if ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'")) return s.slice(1, -1);
     if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
     if (s === 'true') return true;
     if (s === 'false') return false;
     if (s === 'null') return null;
     if (s === 'undefined') return undefined;
-    var call = s.match(/^([\w.$]+)\(\)$/);
-    if (call) {
-      var fn = getPath(scope, call[1]);
-      if (typeof fn === 'function') return fn.call(scope);
-      if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown method "' + s + '"');
-      return undefined;
+    // calls with evaluated arguments: name(a, b). The name resolves
+    // through the blocked-segment guard, so constructor-style gadgets
+    // stay unreachable here too.
+    if (s.charAt(s.length - 1) === ')') {
+      var op2 = s.indexOf('(');
+      if (op2 > 0) {
+        var depth = 0, qq = null, match = -1, k;
+        for (k = op2; k < s.length; k++) {
+          var ch = s[k];
+          if (qq) { if (ch === qq && s[k - 1] !== '\\') qq = null; continue; }
+          if (ch === '"' || ch === "'") { qq = ch; continue; }
+          if (ch === '(') depth++;
+          if (ch === ')') { depth--; if (depth === 0) { match = k; break; } }
+        }
+        if (match === s.length - 1) {
+          var cname = s.slice(0, op2);
+          if (/^[\w.$]+$/.test(cname)) {
+            var fn = getPath(scope, cname);
+            if (typeof fn === 'function') {
+              var raw = s.slice(op2 + 1, match).trim();
+              var args = raw ? splitTop(raw, ',').map(function (a) { return evalExpr(scope, a); }) : [];
+              return fn.apply(scope, args);
+            }
+            if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown method "' + s + '"');
+            return undefined;
+          }
+        }
+      }
+    }
+    // bracket index: list[0], map["key"]. Falls back to a plain path.
+    var br = s.match(/^(.*)\[(\d+|"(?:[^"]*)"|'(?:[^']*)')\]$/);
+    if (br && br[1]) {
+      var base = evalExpr(scope, br[1]);
+      if (base === null || base === undefined) return undefined;
+      /** @type {any} */
+      var key = br[2];
+      if (key[0] === '"' || key[0] === "'") key = key.slice(1, -1);
+      else key = Number(key);
+      if (typeof key === 'string' && badSeg(key)) return undefined;
+      return base[key];
     }
     return getPath(scope, s);
   }
@@ -362,13 +585,26 @@
     var name = s.replace(/\(\)$/, '');
     var fn = actions[name] || getPath(scope, name);
     if (typeof fn === 'function') { fn.call(scope); return; }
+    if (/^[A-Za-z_$][\w.$-]*$/.test(s)) {
+      // Plain name (kebab-case allowed): an action or state function
+      // reference. Never an expression, so hyphens stay literal here
+      // even though they mean subtraction inside evalExpr strings.
+      unknownAction(s);
+      return;
+    }
     var v = evalExpr(scope, s);
     if (typeof v === 'function') v.call(scope);
-    else if (v === undefined) {
-      if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown action "' + s + '"');
-      if (typeof CustomEvent !== 'undefined' && typeof document !== 'undefined' && document.dispatchEvent) {
-        document.dispatchEvent(new CustomEvent('laghu:unknown-action', { detail: { name: s } }));
-      }
+    else if (v === undefined) unknownAction(s);
+  }
+  /**
+   * Loud unknown-action path: dev warning plus a document event every
+   * time, so typos fail visibly in any environment.
+   * @param {string} s
+   */
+  function unknownAction(s) {
+    if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown action "' + s + '"');
+    if (typeof CustomEvent !== 'undefined' && typeof document !== 'undefined' && document.dispatchEvent) {
+      document.dispatchEvent(new CustomEvent('laghu:unknown-action', { detail: { name: s } }));
     }
   }
   /** @param {Element} el @param {Function} fn */
@@ -631,6 +867,12 @@
   function hydrate(root, state, actions) {
     actions = actions || {};
     var scope = state;
+    // Seed the shared fetch-error slot before any binding reads it, so
+    // data-bind="$error.status" subscribes on first render instead of
+    // staying blind. setPath lands it on the owning scope.
+    try {
+      if (isObj(scope) && !('$error' in Object(scope))) setPath(scope, '$error', null);
+    } catch (e) {}
     if (root instanceof Element && /** @type {any} */ (root).hasAttribute && /** @type {any} */ (root).hasAttribute('data-scope') && !/** @type {any} */ (root)._bScope) {
       /** @type {any} */ (root)._bScope = scope;
     }
@@ -659,6 +901,10 @@
           var stop = effect(function () {
             var v = evalExpr(scope, expr);
             if (v === false || v === null || v === undefined) el.removeAttribute(attr);
+            else if (URL_ATTRS[attr.toLowerCase()] && unsafeUrl(v)) {
+              el.removeAttribute(attr);
+              if (DEV && typeof console !== 'undefined') console.warn('[laghu] blocked scriptable URL for "' + attr + '"');
+            }
             else el.setAttribute(attr, String(v));
           });
           onCleanup(el, stop);
@@ -912,7 +1158,7 @@
       var el = /** @type {HTMLElement} */ (node);
       if (claimed(el, 'init')) return;
       var code = el.getAttribute('data-init') || '';
-      try { execAction(scope, actions || {}, code); } catch (e) {}
+      try { execAction(scope, actions || {}, code); } catch (e) { reportError(e); }
     });
     directives.forEach(function (fn, name) {
       root.querySelectorAll('[data-' + name + ']').forEach(function (node) {
@@ -921,7 +1167,7 @@
         try {
           var out = fn({ el: el, get: function () { return evalExpr(scope, el.getAttribute('data-' + name) || ''); }, effect: effect, scope: scope });
           if (typeof out === 'function') onCleanup(el, out);
-        } catch (e) { if (DEV && typeof console !== 'undefined') console.error('[laghu] directive ' + name, e); }
+        } catch (e) { reportError(e); }
       });
     });
     // fetch triggers: data-get/post/put/patch/delete
@@ -938,16 +1184,23 @@
       if (el.hasAttribute('data-method')) method = String(el.getAttribute('data-method') || method).toUpperCase();
       if (!method) method = 'GET';
       if (claimed(el, 'fetch')) return;
-      setupFetch(el, scope, method, url);
+      setupFetch(el, scope, method, url, actions);
     });
   }
   /**
-   * @param {HTMLElement} el @param {any} scope @param {string} method @param {string} url
+   * @param {HTMLElement} el @param {any} scope @param {string} method @param {string} url @param {Record<string, Function>} [actions]
    */
-  function setupFetch(el, scope, method, url) {
+  function setupFetch(el, scope, method, url, actions) {
     var targetSel = el.getAttribute('data-target') || '';
     var swap = el.getAttribute('data-swap') || 'inner';
     var triggerSpec = el.getAttribute('data-trigger') || defaultEvent(el);
+    /** @type {any} */ (el)._bActions = actions || {};
+    // Seed the shared error slot so bindings like data-bind="$error.status"
+    // subscribe before the first request ever runs. Writes land on the
+    // owning scope through setPath, never as a child shadow.
+    var hasErr = false;
+    try { hasErr = ('$error' in Object(scope)); } catch (e) {}
+    if (!hasErr) setPath(scope, '$error', null);
     var fire = function () { doFetch(el, scope, method, url, targetSel, swap); };
     bindTrigger(el, triggerSpec, fire);
   }
@@ -983,24 +1236,38 @@
   function doFetch(el, scope, method, url, targetSel, swap) {
     var m = parseTrigger(el.getAttribute('data-trigger') || defaultEvent(el), el);
     var self = /** @type {any} */ (el);
-    if (self._bInflight && (m.queue === 'first' || m.queue === 'none')) return;
-    if (m.queue === 'last' && self._bReq) { try { self._bReq.abort(); } catch (e) {} }
+    if (!self._bReqs) self._bReqs = new Set();
+    if (self._bN > 0 && (m.queue === 'first' || m.queue === 'none')) return;
+    if (m.queue === 'last') {
+      self._bReqs.forEach(function (/** @type {any} */ c) { try { c.abort(); } catch (e) {} });
+      self._bReqs.clear();
+    }
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    if (ctrl) self._bReq = ctrl;
-    self._bInflight = true;
+    if (ctrl) self._bReqs.add(ctrl);
+    self._bN = (self._bN || 0) + 1;
+    var timedOut = false;
+    var timeoutMs = parseMs(el.getAttribute('data-timeout') || '');
+    var timer = 0;
+    if (timeoutMs > 0 && ctrl) {
+      timer = /** @type {any} */ (setTimeout(function () {
+        timedOut = true;
+        try { if (ctrl) ctrl.abort(); } catch (e) {}
+      }, timeoutMs));
+    }
+    var actions = self._bActions || {};
     var setBusy = function (/** @type {boolean} */ on) {
       var indSel = el.getAttribute('data-indicator');
       var ind = indSel ? document.querySelector(indSel) : null;
       if (ind && ind instanceof HTMLElement) ind.hidden = !on ? true : false;
       if (el instanceof HTMLElement) {
-        if (on) el.setAttribute('data-request', '');
-        else el.removeAttribute('data-request');
+        if (on) { el.setAttribute('data-request', ''); el.setAttribute('data-pending', ''); }
+        else { el.removeAttribute('data-request'); el.removeAttribute('data-pending'); }
         if (el.hasAttribute('data-disable')) el.toggleAttribute('disabled', on);
       }
     };
     setBusy(true);
     var before = new CustomEvent('laghu:before-request', { bubbles: true, cancelable: true, detail: { url: url, method: method } });
-    if (!el.dispatchEvent(before)) { self._bInflight = false; setBusy(false); return; }
+    if (!el.dispatchEvent(before)) { finish(); return; }
     /** @type {any} */
     var opts = { method: method, headers: { Accept: 'application/json, text/html' }, signal: ctrl ? ctrl.signal : undefined };
     var valsRaw = el.getAttribute('data-vals');
@@ -1014,8 +1281,17 @@
         for (var k in fv) v[k] = fv[k];
       }
       if (method === 'GET') {
-        var qs = new URLSearchParams(v).toString();
-        if (qs) url += (url.indexOf('?') >= 0 ? '&' : '?') + qs;
+        var parts = [];
+        for (var qk in v) {
+          if (Array.isArray(v[qk])) {
+            for (var qi = 0; qi < v[qk].length; qi++) {
+              parts.push(encodeURIComponent(qk) + '=' + encodeURIComponent(String(v[qk][qi])));
+            }
+          } else {
+            parts.push(encodeURIComponent(qk) + '=' + encodeURIComponent(String(v[qk])));
+          }
+        }
+        if (parts.length) url += (url.indexOf('?') >= 0 ? '&' : '?') + parts.join('&');
       } else {
         opts.headers['Content-Type'] = 'application/json';
         body = JSON.stringify(v);
@@ -1033,16 +1309,26 @@
       var hh = tryJSON(hRaw) || {};
       for (var hk in hh) opts.headers[hk] = hh[hk];
     }
-    var done = function () { self._bInflight = false; if (self._bReq === ctrl) self._bReq = null; setBusy(false); };
+    var finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      if (timer) clearTimeout(timer);
+      if (ctrl) self._bReqs.delete(ctrl);
+      self._bN = Math.max(0, (self._bN || 1) - 1);
+      setBusy(false);
+    }
     fetch(url, opts).then(function (res) {
-      done();
+      finish();
       el.dispatchEvent(new CustomEvent('laghu:after-request', { bubbles: true, detail: { status: res.status, url: url } }));
       if (!res.ok) {
+        setPath(scope, '$error', { status: res.status, url: url });
         el.dispatchEvent(new CustomEvent('laghu:request-error', { bubbles: true, detail: { status: res.status, url: url } }));
         return;
       }
-      var ct = res.headers.get('content-type') || '';
-      if (ct.indexOf('application/json') >= 0) return res.json().then(function (data) {
+      var ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('json') >= 0) return res.json().then(function (data) {
+        setPath(scope, '$error', null);
         if (data && typeof data === 'object' && !Array.isArray(data)) Object.assign(scope, data);
         else setPath(scope, 'result', data);
       });
@@ -1056,13 +1342,14 @@
         }
         var target = targetSel ? document.querySelector(targetSel) : el;
         if (!target) return;
-        swapHtml(/** @type {Element} */ (target), html, swap, scope);
+        swapHtml(/** @type {Element} */ (target), html, swap, scope, actions);
       });
     }).catch(function (err) {
-      done();
-      if (err && err.name === 'AbortError') return;
-      el.dispatchEvent(new CustomEvent('laghu:request-error', { bubbles: true, detail: { error: err } }));
-      if (DEV && typeof console !== 'undefined') console.error('[laghu] fetch', err);
+      finish();
+      if (err && err.name === 'AbortError' && !timedOut) return;
+      setPath(scope, '$error', { message: String((err && err.message) || err), timeout: timedOut });
+      el.dispatchEvent(new CustomEvent('laghu:request-error', { bubbles: true, detail: { error: err, timeout: timedOut } }));
+      reportError(err);
     });
   }
   /**
@@ -1113,8 +1400,14 @@
    * @param {string} html Response HTML (already selected if data-select used).
    * @param {string} swap Mode name, case insensitive.
    * @param {any} scope State the swapped-in content hydrates against.
+   * @param {Record<string, Function>} [actions] Named actions for handlers
+   *   in the new content. Fetch swaps reuse the requesting element's
+   *   actions automatically; without them swapped-in data-click goes
+   *   quiet with an unknown-action warning.
    */
-  function swapHtml(target, html, swap, scope) {
+  function swapHtml(target, html, swap, scope, actions) {
+    actions = actions || {};
+    var s = String(swap || 'inner').toLowerCase();
     var s = String(swap || 'inner').toLowerCase();
     if (s === 'none') { target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } })); return; }
     var focusId = document.activeElement && /** @type {any} */ (document.activeElement).id ? /** @type {any} */ (document.activeElement).id : null;
@@ -1126,8 +1419,8 @@
     /** @type {any} */ var M = typeof window !== 'undefined' ? /** @type {any} */ (window).LaghuMorph : null;
     if (isMorph) {
       if (M && M.morph) {
-        M.morph(target, sanitize(html), {});
-        hydrate(target, scope, {});
+        M.morph(target, sanitize(html), { mode: s === 'morph:outer' ? 'outer' : 'inner' });
+        hydrate(target, scope, actions);
         target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } }));
         restoreFocus(focusId, selStart, selEnd);
         return;
@@ -1173,7 +1466,7 @@
       }
     });
     var root = s === 'outer' ? (target.parentNode instanceof Element ? target.parentNode : document.body) : target;
-    hydrate(root, scope, {});
+    hydrate(root, scope, actions);
     target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } }));
     restoreFocus(focusId, selStart, selEnd);
   }
@@ -1267,17 +1560,18 @@
         var state = reactive(initial);
         /** @type {any} */ (this).state = state;
         /** @type {any} */ (this).actions = r.actions || {};
+        if (typeof r.onUnmount === 'function') /** @type {any} */ (this)._bOnUnmount = r.onUnmount;
         hydrate(this, state, r.actions || {});
-        try { if (typeof r.onMount === 'function') r.onMount.call(state); } catch (e) {}
+        try { if (typeof r.onMount === 'function') r.onMount.call(state); } catch (e) { reportError(e); }
         this.classList.add('is-defined');
         this.dispatchEvent(new CustomEvent('laghu:mount'));
       }
       disconnectedCallback() {
         try {
           var st = /** @type {any} */ (this).state;
-          var r2 = null;
-          void r2; void st;
-        } catch (e) {}
+          var un = /** @type {any} */ (this)._bOnUnmount;
+          if (typeof un === 'function' && st) un.call(st);
+        } catch (e) { reportError(e); }
         destroyTree(this);
         this.dispatchEvent(new CustomEvent('laghu:unmount'));
         /** @type {any} */ (this)._bInit = false;
@@ -1315,7 +1609,7 @@
               try {
                 var api2 = /** @type {any} */ (window).Laghu;
                 if (api2) api2.hydrate(n, parseScope(n.getAttribute('data-scope')), {});
-              } catch (e) {}
+              } catch (e) { reportError(e); }
             }
           }
         });
@@ -1374,6 +1668,75 @@
     store: function (/** @type {string} */ name, /** @type {any} */ init) {
       if (init !== undefined) { var s = reactive(init); stores.set(name, s); return s; }
       return stores.get(name);
+    },
+    /**
+     * Derived value kept fresh by an effect. Call the getter inside
+     * bindings or other effects to subscribe; eager recompute keeps
+     * it simple and predictable at this scale.
+     * @example
+     * var doubled = Laghu.computed(function () { return state.count * 2; });
+     * Laghu.effect(function () { el.textContent = doubled(); });
+     */
+    computed: function (/** @type {Function} */ fn) {
+      var box = reactive({ v: undefined });
+      effect(function () { box.v = fn(); });
+      return function () { return box.v; };
+    },
+    /**
+     * Call back with (next, prev) whenever an expression's value
+     * changes. Reads without subscribing the caller's own effect.
+     * @example
+     * Laghu.watch(state, 'user.name', function (n, o) { console.log(o, 'becomes', n); });
+     */
+    watch: function (/** @type {any} */ scope, /** @type {string} */ expr, /** @type {Function} */ cb) {
+      var started = false;
+      /** @type {any} */
+      var prev;
+      return effect(function () {
+        var next = evalExpr(scope, expr);
+        if (!started) { started = true; prev = next; return; }
+        if (next !== prev) {
+          var o = prev;
+          prev = next;
+          cb(next, o);
+        }
+      });
+    },
+    /**
+     * Persist a named store to localStorage (debounced) and restore it
+     * on next boot. Version mismatch reseeds from init. No-op without
+     * localStorage (file:// included where available).
+     * @example
+     * Laghu.store('cart', { n: 0 });
+     * Laghu.persist('cart', { key: 'cart:v1', version: 1 });
+     */
+    persist: function (/** @type {string} */ name, /** @type {{key?: string, version?: number, debounce?: number}} */ opts) {
+      opts = opts || {};
+      var key = opts.key || ('laghu:' + name);
+      var ver = opts.version === undefined ? 1 : opts.version;
+      var wait = opts.debounce === undefined ? 300 : opts.debounce;
+      var st = stores.get(name);
+      if (!st) return null;
+      try {
+        var raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+        if (raw) {
+          var saved = JSON.parse(raw);
+          if (saved && saved.v === ver && saved.state && typeof saved.state === 'object') {
+            Object.assign(st, saved.state);
+          }
+        }
+      } catch (e) { reportError(e); }
+      var timer = 0;
+      effect(function () {
+        JSON.stringify(st);
+        if (typeof localStorage === 'undefined') return;
+        if (timer) clearTimeout(timer);
+        timer = /** @type {any} */ (setTimeout(function () {
+          try { localStorage.setItem(key, JSON.stringify({ v: ver, state: st })); }
+          catch (e) { reportError(e); }
+        }, wait));
+      });
+      return st;
     },
     directive: function (/** @type {string} */ name, /** @type {Function} */ fn) { directives.set(name, fn); }
   };

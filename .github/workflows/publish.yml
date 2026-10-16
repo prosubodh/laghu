@@ -82,9 +82,9 @@ jobs:
             const meta = JSON.parse(raw)[0];
             const files = new Set(meta.files.map((f) => f.path));
             const required = [
-              "package.json", "README.md", "LICENSE",
-              "dist/laghu.min.js", "dist/morph.min.js", "dist/laghu.d.ts",
-              "src/laghu.js", "src/morph.js"
+              "package.json", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md",
+              "dist/laghu.min.js", "dist/morph.min.js", "dist/router.min.js", "dist/laghu.d.ts",
+              "src/laghu.js", "src/morph.js", "src/router.js"
             ];
             const missing = required.filter((f) => !files.has(f));
             if (missing.length) {

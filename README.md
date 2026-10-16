@@ -27,6 +27,7 @@ Contents:
 - [15. Checking your setup](#15-checking-your-setup)
 - [16. Troubleshooting](#16-troubleshooting)
 - [17. Project files](#17-project-files)
+- [18. Roadmap (explicit non-goals included)](#18-roadmap-explicit-non-goals-included)
 
 ## 1. When to use laghu
 
@@ -182,8 +183,9 @@ One-way text binding. Same behavior, two spellings. Sets
 ### data-html
 
 Renders a value as HTML. Explicit opt-in because HTML parsing is an
-XSS risk. Content passes through the sanitize hook (see
-`Laghu.sanitize`). Prefer `data-bind` unless you trust the source.
+XSS risk. Content passes through the baseline sanitizer, replaceable
+with `Laghu.sanitize` (DOMPurify for untrusted sources). Prefer
+`data-bind` unless you trust the source.
 
 ```html
 <div data-html="post.body"></div>
@@ -367,6 +369,43 @@ Fetch companions:
 - `data-headers`: extra headers as JSON.
 - `data-indicator="#spin"`: element shown while the request flies.
 - `data-disable`: disables the element while its request flies.
+- `data-timeout="5000"`: aborts hung requests (milliseconds);
+  timeouts report `laghu:request-error` with `timeout: true`.
+- `data-pending`: set on the element during flight (style hooks
+  like `[data-pending] { opacity: .5; }`).
+- `state.$error`:fetch failures record `{ status }` or `{ message,
+  timeout }` here (null when healthy). Bind it directly:
+  `<span data-bind="$error.status"></span>`.
+
+### Hash routing (router plugin)
+
+For pages with a handful of views, load `router.min.js` after the
+core and declare hash routes. Past about five guarded routes, use
+a real router; this one stays small on purpose.
+
+```html
+<script src="laghu.min.js"></script>
+<script src="router.min.js"></script>
+<div id="view"></div>
+<script>
+  LaghuRouter.route({
+    target: '#view',
+    scope: state,
+    routes: [
+      { path: '/', render: function () { return '<h1>Home</h1>'; } },
+      { path: '/user/:id', render: function (p) { return '<h1>User ' + p.id + '</h1>'; } }
+    ],
+    notfound: function () { return '<h1>Missing</h1>'; },
+    beforeEach: function (to) { return true; }
+  });
+  LaghuRouter.navigate('/user/42');
+</script>
+```
+
+Links are plain anchors (`href="#/user/42"`); hash changes drive
+renders, params decode automatically, guards cancel by returning
+false, and rendered fragments hydrate with the scope and actions
+you pass in.
 
 ### data-trigger
 
@@ -466,34 +505,51 @@ trigger. Nested objects wrap on first read.
 ### Laghu.effect(fn)
 
 Runs `fn` now and again whenever state it read changes. Returns a
-stop function. One effect per binding is the normal pattern.
+stop function that fully unsubscribes. Subscriptions refresh every
+run, so untaken branches release. Nested effects compose; a throwing
+run reports `laghu:error` and the page survives. One effect per
+binding is the normal pattern.
 
 ### Laghu.eval(scope, expr)
 
 Reads one expression without `new Function` (CSP-safe). Supports
-paths, literals, `!`, comparisons, `&&`, `||`, and no-argument
-calls like `reset()`.
+dotted paths, bracket indexes (`list[0]`, `map["k"]`), literals,
+`!` and unary `-`, arithmetic (`+ - * / %`), comparisons, `&&`,
+`||`, ternary (`a ? b : c`), parenthesized groups, and calls with
+evaluated arguments like `total(qty)`. Anything else is undefined.
+
+State keys must be valid identifiers (camelCase): a hyphen means
+subtraction inside expressions. Action names are exempt; exact
+action lookup runs before expression parsing, so
+`data-click="my-action"` stays literal.
 
 ### Laghu.get(scope, path) and Laghu.set(scope, path, val)
 
 Dotted path access with scope-chain lookup. `$store.name.key`
-reaches global stores.
+reaches global stores. Segments `__proto__`, `constructor`, and
+`prototype` are refused on read and write. Late-added keys wake
+readers: bindings on keys that do not exist yet update when the
+keys appear. Writes follow the chain to the owning scope.
 
 ### Laghu.parseTrigger(spec, el)
 
 Parses `data-trigger` text into a modifier object. Useful for
 testing and custom wiring.
 
-### Laghu.swap(target, html, mode, scope)
+### Laghu.swap(target, html, mode, scope, actions)
 
 Swaps HTML and hydrates the result. See modes in section 5.
 Dispatches `laghu:before-swap` and `laghu:after-swap`, preserves
-`data-preserve` nodes, restores focus and caret.
+`data-preserve` nodes, restores focus and caret. The optional
+`actions` map wires handlers in the new content; fetch swaps reuse
+the requesting element's actions automatically.
 
 ### Laghu.sanitize(fn)
 
-Replaces the HTML pass-through used by `data-html` and swaps.
-Install a real sanitizer when rendering server HTML:
+Replaces the HTML pass-through used by `data-html` and swaps. The
+default is a baseline cleaner (scripts, frames, event handlers,
+scriptable URLs stripped), not a policy. Install a real sanitizer
+when rendering untrusted HTML:
 
 ```js
 Laghu.sanitize(function (h) { return DOMPurify.sanitize(h); });
@@ -511,6 +567,32 @@ Laghu.store('cart').n++;
 
 ```html
 <span data-bind="$store.cart.n"></span>
+```
+
+### Laghu.computed(fn)
+
+Derived value kept fresh by an effect. Call the getter inside
+bindings or other effects to subscribe.
+
+```js
+var total = Laghu.computed(function () { return state.price * state.qty; });
+Laghu.effect(function () { el.textContent = total(); });
+```
+
+### Laghu.watch(scope, expr, cb)
+
+Calls back with `(next, prev)` whenever an expression's value
+changes. Reads without subscribing the caller's own effect.
+Returns the stop function.
+
+### Laghu.persist(name, opts)
+
+Persists a named store to localStorage (debounced) with versioned
+restore. Mismatched versions reseed instead of loading.
+
+```js
+Laghu.store('cart', { n: 0 });
+Laghu.persist('cart', { key: 'cart:v1', version: 1 });
 ```
 
 ### Laghu.directive(name, fn)
@@ -670,14 +752,30 @@ laghu runs under strict CSP with no `unsafe-eval` and no
 `unsafe-inline`:
 
 - No `new Function`, no `eval`, no string `setTimeout`. Expressions
-  use a small built-in reader (paths, literals, `!`, comparisons,
-  `&&`, `||`, no-argument calls).
+  use a small built-in reader (paths, indexes, literals, `!`,
+  arithmetic, comparisons, `&&`, `||`, ternary, calls with args).
 - No inline handlers. All listeners attach with
   `addEventListener` from `data-*` attributes.
-- Ship laghu as an external file with a Subresource Integrity hash.
+- Ship laghu as an external file with a Subresource Integrity hash
+  (`node scripts/sri.mjs` prints them for release notes).
 - `data-scope` takes JSON only, for the same no-eval reason.
-- `data-html` and swaps accept HTML by design. Point
-  `Laghu.sanitize` at DOMPurify when content comes from a server.
+
+No-eval is not the whole of web security. The rest of the posture:
+
+- `data-html` and swaps pass a baseline sanitizer (scripts, frames,
+  event-handler attributes, scriptable URLs stripped). It is a
+  floor: point `Laghu.sanitize` at DOMPurify for untrusted content,
+  and set `script-src-attr 'none'` in your policy for defense in
+  depth.
+- Attribute bindings refuse `javascript:`, `data:text/html`, and
+  `vbscript:` URLs on navigation and loading attributes.
+- State paths refuse `__proto__`, `constructor`, and `prototype`
+  segments on read and write, including inside action strings.
+- Runtime failures dispatch `laghu:error` (bindings, directives,
+  init, unmount) and `laghu:request-error` (fetch) in every
+  environment; consoles stay quiet unless you enable dev mode.
+- See `SECURITY.md` for reporting, supported versions, and the
+  audit-backed regression list.
 
 ## 12. Loading flash and SEO notes
 
@@ -701,10 +799,19 @@ never run.
 
 Measured after minification:
 
-- Core `dist/laghu.min.js`: about 21kB raw, 6.8kB gzip, 6.1kB brotli.
+- Core `dist/laghu.min.js`: about 27.5kB raw, 9.2kB gzip, 8.2kB brotli.
 - Morph `dist/morph.min.js`: about 2.3kB raw, 1kB gzip.
+- Router `dist/router.min.js`: about 1.7kB raw, 0.9kB gzip.
 - Budgets enforced by `node scripts/size.mjs`: core at or under
-  7.5kB gzip, morph at or under 3kB gzip.
+  10kB gzip, morph at or under 3kB gzip, router at or under
+  2.5kB gzip.
+
+The core grew from 7.1kB to 9.2kB for two consensus items: the
+security baseline (default sanitizer, URL policy, pollution
+guards, error isolation, effect unsubscribe) and the expression
+grammar (ternary, arithmetic, argued calls, indexing). Both are
+audited-in requirements, not creep: the budget moved openly, and
+the total stays under half of htmx alone (~16kB gzip).
 
 For scale: htmx alone is about 16kB gzip, Alpine with a few plugins
 is 12 to 15kB. laghu core plus morph stays under half of either.
@@ -738,7 +845,7 @@ See the `examples/` folder. Each file opens directly from disk.
   for the URLs, or swap in local JSON files).
 
 `test/examples.mjs` boots every file above and drives it: 48
-assertions, all passing alongside the 37 in `test/run.mjs`.
+assertions, all passing alongside the suites below.
 
 ## 15. Checking your setup
 
@@ -746,15 +853,18 @@ assertions, all passing alongside the 37 in `test/run.mjs`.
 npm install
 npx tsc --noEmit -p jsconfig.json
 node scripts/size.mjs
+node scripts/sri.mjs
 npm test
 ```
 
-85 tests cover (37 in `test/run.mjs` plus 48 in `test/examples.mjs`):
-counter increments, text and attribute bindings, conditionals, keyed
-reorder reuse, two-way inputs, attribute sync, triggers, JSON merge,
-all swap modes, morph focus preservation, stores, directives with
-cleanup, unknown-action warnings, and every shipped example page
-driven end to end.
+154 tests cover (71 in `test/run.mjs` plus 48 in
+`test/examples.mjs`, 23 in `test/apps.mjs`, 12 in
+`test/router.mjs`): counter increments, text and attribute
+bindings, conditionals, keyed reorder reuse, two-way inputs,
+attribute sync, triggers, JSON merge, all swap modes, morph focus
+preservation, stores, directives with cleanup, unknown-action
+warnings, every shipped example page driven end to end, both demo
+apps played to completion, and the router contract.
 
 Releasing a new version (publishes to npm through CI):
 
@@ -798,15 +908,46 @@ Request never fires with `changed`: the input value never differed.
 morph warns and falls back: `morph.min.js` is not loaded. Add the
 script tag after the core.
 
+`data-click="my-action"` does nothing: check the actions map first;
+exact names win before expression parsing. `data-bind="a-b"` on the
+other hand always subtracts; rename the key to camelCase.
+
+New key renders blank: bindings subscribe to keys that appear later,
+but prefer declaring the full shape up front so first paint is
+complete.
+
 ## 17. Project files
 
 - `src/laghu.js`: core source with full JSDoc, loaded directly in
   development.
 - `src/morph.js`: opt-in morph plugin source with full JSDoc.
-- `dist/laghu.min.js`, `dist/morph.min.js`: minified builds.
+- `src/router.js`: opt-in hash router plugin with full JSDoc.
+- `dist/laghu.min.js`, `dist/morph.min.js`, `dist/router.min.js`:
+  minified builds.
 - `dist/laghu.d.ts`: TypeScript declarations for consumers.
-- `test/run.mjs`: jsdom suite, 37 assertions.
+- `test/run.mjs`: jsdom suite, 71 assertions including security
+  regressions.
 - `test/examples.mjs`: boots every example page and drives it, 48 assertions.
+- `test/apps.mjs`: plays both demo apps to completion, 23 assertions.
+- `test/router.mjs`: router contract, 12 assertions.
 - `scripts/size.mjs`: minifies and enforces gzip budgets.
-- `examples/`: three pages opening from disk.
+- `scripts/sri.mjs`: prints SRI hashes for release notes.
+- `examples/`: nine pages opening from disk.
+- `apps/`: full demo projects with the prescribed structure.
+- `bench/`: five-way benchmark harness and results.
+- `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`: release,
+  security, and contribution contracts.
 - `jsconfig.json`: strict `checkJs` config used by editors and CI.
+
+## 18. Roadmap (explicit non-goals included)
+
+Next, in order: declarative validation (`data-validate` with
+schemas), transitions (`data-transition`), async fallback templates
+for fetch, icon and Tailwind interop recipes (`data-icon`,
+class merging), then docs site, real-browser matrix, and devtools.
+
+Deliberately out of scope: JSX or any compiler toolchain, VDOM
+diffing in core, built-in auth/i18n/charts/offline-sync, a Node
+SSR server, full SPA parity. laghu owns small interactive pages
+and embeds; it graduates users to bigger tools with documented
+boundaries instead of cloning them badly.
