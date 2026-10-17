@@ -64,8 +64,18 @@
         var match = k ? oldByKey.get(k) : null;
         if (match && !used.has(match)) {
           used.add(match);
-          morphEl(match, nk);
-          out.push(match);
+          if (match.tagName !== nk.tagName) {
+            var rep = (
+              /** @type {Element} */
+              nk.cloneNode(true)
+            );
+            match.replaceWith(rep);
+            used.add(rep);
+            out.push(rep);
+          } else {
+            morphEl(match, nk);
+            out.push(match);
+          }
         } else {
           var reuse = null;
           var olds = oldEl.children;
@@ -119,6 +129,9 @@
       var wrap = document.createElement(target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div");
       wrap.appendChild(tmp.content.cloneNode(true));
       var fake = document.createElement(target.tagName);
+      Array.prototype.forEach.call(target.attributes, function(at) {
+        fake.setAttribute(at.name, at.value);
+      });
       Array.prototype.forEach.call(wrap.childNodes, function(n) {
         fake.appendChild(n.cloneNode(true));
       });

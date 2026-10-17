@@ -126,8 +126,18 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
       var match = k ? oldByKey.get(k) : null;
       if (match && !used.has(match)) {
         used.add(match);
-        morphEl(match, nk);
-        out.push(match);
+        if (match.tagName !== nk.tagName) {
+          // Different tag under the same key: replace outright and adopt
+          // the replacement. Pushing the detached old node here would let
+          // the stale pass below delete the freshly inserted clone.
+          var rep = /** @type {Element} */ (nk.cloneNode(true));
+          match.replaceWith(rep);
+          used.add(rep);
+          out.push(rep);
+        } else {
+          morphEl(match, nk);
+          out.push(match);
+        }
       } else {
         // positional reuse: same tag among unused
         var reuse = null;
@@ -189,6 +199,10 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
     wrap.appendChild(tmp.content.cloneNode(true));
     // morph target against wrapper: wrap children = new children
     var fake = document.createElement(target.tagName);
+    // Inner mode reconciles children only. Mirror the target's own
+    // attributes onto the placeholder so syncAttrs does not strip the
+    // container's id/class/data-* (which would break later targeting).
+    Array.prototype.forEach.call(target.attributes, function (at: Attr) { fake.setAttribute(at.name, at.value); });
     Array.prototype.forEach.call(wrap.childNodes, function (n: Node) { fake.appendChild(n.cloneNode(true)); });
     morphEl(target, fake);
   }

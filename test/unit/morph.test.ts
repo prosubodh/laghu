@@ -48,6 +48,12 @@ describe('LaghuMorph', () => {
     expect(t.querySelector('p#a')).toBeNull();
   });
 
+  it('preserves the target element attributes in inner mode', () => {
+    const t = morphEd(`<li id="r1">one</li>`, `<li id="r1">one!</li>`);
+    expect(t.id).toBe('t');
+    expect(document.querySelector('#t')).toBe(t);
+  });
+
   it('updates text and drops stale children with cleanup', () => {
     let cleaned = 0;
     const host = document.createElement('div');
