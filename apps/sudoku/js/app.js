@@ -5,7 +5,7 @@ Laghu.store("sudoku", SudokuStore.initial());
 SudokuStore.newGame(Laghu.store("sudoku"), "easy");
 
 Laghu.directive("clock", function (ctx) {
-  var id = setInterval(function () {
+  const id = setInterval(function () {
     if (ctx.scope.status === "playing") {
       ctx.scope.seconds++;
       ctx.scope.clock = SudokuStore.fmtTime(ctx.scope.seconds);

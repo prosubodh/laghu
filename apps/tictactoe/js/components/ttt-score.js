@@ -7,7 +7,7 @@
  *   </ttt-score>
  */
 Laghu.define("ttt-score", function () {
-  var store = Laghu.store("ttt");
+  const store = Laghu.store("ttt");
   return {
     state: store,
     actions: {

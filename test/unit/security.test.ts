@@ -88,7 +88,7 @@ describe("laghu:error reporting", () => {
 
   it("supports custom sanitize hook and cleans unsafe href in html", async () => {
     Laghu.sanitize((raw: string) => raw.replace(/bad/g, "good"));
-    const s = island(`<div id="cust-h" data-html="content"></div>`, {
+    island(`<div id="cust-h" data-html="content"></div>`, {
       content: 'bad <a href="javascript:alert(1)">click</a>',
     });
     await tick();

@@ -41,7 +41,7 @@ export function findSourceFiles(dir) {
       results.push(path.resolve(full));
     }
   }
-  return results.sort();
+  return results.sort((a, b) => a.localeCompare(b));
 }
 function resolveImportTarget(sourceFile, specifier) {
   const dir = path.dirname(sourceFile);

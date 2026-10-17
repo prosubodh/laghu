@@ -197,8 +197,8 @@ describe("display filters", () => {
 describe("template data-if", () => {
   it("attaches and detaches blocks with cleanup", async () => {
     let cleaned = 0;
-    Laghu.directive("t-probe-tif", ({ effect, el }) => {
-      const stop = effect(() => {});
+    Laghu.directive("t-probe-tif", (ctx) => {
+      const stop = ctx.effect(() => {});
       return () => {
         cleaned++;
         stop();
@@ -245,7 +245,7 @@ describe("data-click and data-on", () => {
 
   it("calls component actions with arguments", async () => {
     const seen: Array<[string, any]> = [];
-    const s = island(
+    island(
       `<button id="one" data-click="pick('one', 1)">1</button>
        <button id="two" data-click="pick('two', 2)">2</button>`,
       { n: 5 },
@@ -306,9 +306,9 @@ describe("data-click and data-on", () => {
 describe("directives and lifecycle", () => {
   it("runs custom directives with cleanup", async () => {
     let cleaned = 0;
-    Laghu.directive("t-hello", ({ el, get, effect }) => {
-      const stop = effect(() => {
-        el.textContent = "h:" + String(get());
+    Laghu.directive("t-hello", (ctx) => {
+      const stop = ctx.effect(() => {
+        ctx.el.textContent = "h:" + String(ctx.get());
       });
       return () => {
         cleaned++;
@@ -876,7 +876,7 @@ describe("directives and lifecycle", () => {
 
   it("covers remaining DOM edge cases: DocumentFragment roots, SSR init, bindModel null/div, and template lifecycle", async () => {
     // 1. unknownAction when document.dispatchEvent is undefined
-    const origDispatch = document.dispatchEvent;
+    const origDispatch = document.dispatchEvent.bind(document);
     (document as any).dispatchEvent = undefined;
     const rootUnknown = document.createElement("div");
     rootUnknown.innerHTML = `<span data-init="missingAction"></span>`;
@@ -969,8 +969,8 @@ describe("directives and lifecycle", () => {
 
     // 8. custom directive on element with empty attribute value
     let dirEmptyVal: any;
-    Laghu.directive("t-empty-attr", ({ get }) => {
-      dirEmptyVal = get();
+    Laghu.directive("t-empty-attr", (ctx) => {
+      dirEmptyVal = ctx.get();
     });
     const rootDir = document.createElement("div");
     rootDir.innerHTML = `<span data-t-empty-attr=""></span>`;

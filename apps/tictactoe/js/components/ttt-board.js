@@ -14,12 +14,12 @@
  *   </ttt-board>
  */
 Laghu.define("ttt-board", function () {
-  var store = Laghu.store("ttt");
+  const store = Laghu.store("ttt");
   return {
     state: store,
     actions: {
       place: function () {
-        var i = Laghu.get(this, "i");
+        const i = Laghu.get(this, "i");
         TttStore.place(store, i);
       },
       newRound: function () {

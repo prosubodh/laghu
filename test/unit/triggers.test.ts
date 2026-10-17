@@ -73,7 +73,7 @@ describe("store and persist", () => {
     window.localStorage.setItem("laghu:err-store", "invalid-json{{{");
     Laghu.persist("err-store", { debounce: 10 });
 
-    const origSetItem = window.localStorage.setItem;
+    const origSetItem = window.localStorage.setItem.bind(window.localStorage);
     window.localStorage.setItem = () => {
       throw new Error("storage quota");
     };
@@ -194,6 +194,7 @@ describe("bindTrigger live behavior", () => {
     expect(loadFired).toBe(1);
 
     Laghu.destroyTree(root);
+    expect(disconnected).toBe(3);
     delete (globalThis as any).IntersectionObserver;
     delete (window as any).IntersectionObserver;
   });

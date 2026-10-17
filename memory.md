@@ -7,6 +7,7 @@ Clean slate per lets-build: no template ADRs carried over.
 
 | ADR                                                                                | Title                                               | Date       | Status                | Governs                                |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
+| [ADR-009](./memory.md#adr-009-clean-code-refactoring-and-zero-warning-craftsmanship) | Clean Code refactoring and zero-warning craftsmanship | 2026-10-17 | ACCEPTED              | [`src/laghu.ts`](./src/laghu.ts)       |
 | [ADR-008](./memory.md#adr-008-enforce-100-test-coverage-and-clean-code-architecture) | Enforce 100% test coverage and Clean Code architecture | 2026-10-17 | ACCEPTED              | [`vitest.config.ts`](./vitest.config.ts) |
 | [ADR-007](./memory.md#adr-007-enforce-harness-parity-by-content-not-symlinks)      | Enforce harness parity by content, not symlinks     | 2026-10-17 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
 | [ADR-006](./memory.md#adr-006-cross-platform-toolchain-fix-and-governance-re-sync) | Cross-platform toolchain fix and governance re-sync | 2026-10-17 | ACCEPTED              | [`package.json`](./package.json)       |
@@ -15,6 +16,19 @@ Clean slate per lets-build: no template ADRs carried over.
 | [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                        | Vitest TDD, units against src                       | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)            | TypeScript source, zero-build consumption           | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
 | [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline)        | Target Technology Stack & Scaffolding Baseline      | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
+
+#### ADR-009: Clean Code refactoring and zero-warning craftsmanship
+
+- **Date:** 2026-10-17 | **Status:** ACCEPTED
+- **Context:** azcodr Clean Code directives ([`docs/rules/clean_code.md`](./docs/rules/clean_code.md)) prohibit boolean flag arguments (which violate SRP by indicating a function performs two different modes of operation), long routines (>30 lines) mixing levels of abstraction (violating SLAP), legacy `var` declarations, and unhandled linter warnings. An audit of `laghu` identified flag parameters in `transFrames(kind, out)` and `bindModelInput(el, scope, path, isCheck, isRadio, isSelect)`, long routines in `renderRows`, `doFetch`, `buildFetchOptions`, `bindTrigger`, and `bindTemplateIf`, residual `var` statements in `apps/sudoku` and `apps/tictactoe`, and 19 linter warnings from unused catch bindings and unbound method references in test mocks.
+- **Decision:**
+  1. Eliminate all boolean flag arguments: split `transFrames` into `transFramesEnter` and `transFramesLeave`, decompose `bindModelInput` into `syncCheckboxModel`, `syncSelectModel`, and `syncValueModel`.
+  2. Decompose long routines into focused, single-responsibility functions adhering to SLAP (`mountIfBranch`, `unmountIfBranch`, `resolveRowKey`, `mountRow`, `updateRow`, `reorderRows`, `cleanupRemovedRows`, `buildQueryString`, `resolveRequestPayload`, `applyCustomHeaders`, `applyJsonResponse`, `extractHtmlFragment`, `updateElementBusyState`, `shouldQueueRequest`, `handleFetchError`, `bindEveryTrigger`, `bindLoadTrigger`, `bindRevealedTrigger`, `resolveListenTarget`).
+  3. Replace all remaining `var` declarations in demo apps with `const` and `let`.
+  4. Eliminate all 19 linter warnings: use optional catch bindings `catch {}`, bind unbound method references (`.bind(...)` or arrow wrappers), and resolve mock thenable warnings.
+  5. Preserve 100.00% test coverage across all 4 metrics and maintain gzip bundle under 10,752 bytes (10,493 bytes achieved).
+- **Consequences:** 0 linter warnings or errors across 60 files, 0 typecheck errors, 100.00% statement, branch, function, and line coverage preserved across all 194 unit and integration tests, with zero breaking changes to public APIs.
+- **Enforced In:** [`src/laghu.ts`](./src/laghu.ts), [`apps/sudoku/js/`](./apps/sudoku/js/), [`apps/tictactoe/js/`](./apps/tictactoe/js/), [`test/unit/`](./test/unit/).
 
 #### ADR-008: Enforce 100% test coverage and Clean Code architecture
 

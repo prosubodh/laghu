@@ -193,7 +193,7 @@ export const Laghu: LaghuAPI = (() => {
           }),
         );
       }
-    } catch (e) {}
+    } catch {}
     errorDev(err);
   }
 
@@ -812,7 +812,7 @@ export const Laghu: LaghuAPI = (() => {
     if (root instanceof Element && root.matches) {
       try {
         if (root.matches(selector)) fn(root);
-      } catch (e) {}
+      } catch {}
     }
     Array.prototype.forEach.call(root.querySelectorAll(selector), fn);
   }
@@ -826,20 +826,53 @@ export const Laghu: LaghuAPI = (() => {
     return out;
   }
 
-  function transFrames(kind: string, out: boolean): Array<Record<string, string>> {
+  function transFramesEnter(kind: string): Array<Record<string, string>> {
     const from =
       kind.indexOf("slide") >= 0
         ? "translateY(-8px)"
         : kind.indexOf("scale") >= 0
           ? "scale(.96)"
           : "none";
-    const a = { opacity: "0", transform: from };
-    const b = { opacity: "1", transform: "none" };
-    return out ? [b, a] : [a, b];
+    return [
+      { opacity: "0", transform: from },
+      { opacity: "1", transform: "none" },
+    ];
+  }
+
+  function transFramesLeave(kind: string): Array<Record<string, string>> {
+    const frames = transFramesEnter(kind);
+    return [frames[1], frames[0]];
   }
 
   function transDur(el: Element): number {
     return parseMs(el.getAttribute("data-duration") || "150ms") || 150;
+  }
+
+  function showElement(el: HTMLElement, kind: string): void {
+    const dur = transDur(el);
+    ((el as any)._bT = ((el as any)._bT || 0) + 1);
+    (el as any)._bHide = false;
+    el.hidden = false;
+    try {
+      const anim = el.animate(transFramesEnter(kind), { duration: dur, easing: "ease-out" });
+      if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {});
+    } catch {}
+  }
+
+  function hideElement(el: HTMLElement, kind: string): void {
+    const dur = transDur(el);
+    const token = ((el as any)._bT = ((el as any)._bT || 0) + 1);
+    (el as any)._bHide = true;
+    try {
+      const anim = el.animate(transFramesLeave(kind), { duration: dur, easing: "ease-in" });
+      const onDone = function () {
+        if ((el as any)._bT === token && (el as any)._bHide && el.isConnected) el.hidden = true;
+      };
+      if (anim && anim.finished && anim.finished.then) anim.finished.then(onDone, onDone);
+      else setTimeout(onDone, dur);
+    } catch {
+      el.hidden = true;
+    }
   }
 
   function setHidden(el: HTMLElement, hide: boolean): void {
@@ -861,26 +894,10 @@ export const Laghu: LaghuAPI = (() => {
       return;
     }
 
-    const dur = transDur(el);
-    const tk = ((el as any)._bT = ((el as any)._bT || 0) + 1);
-    (el as any)._bHide = hide;
-    if (!hide) {
-      el.hidden = false;
-      try {
-        const anim = el.animate(transFrames(kind, false), { duration: dur, easing: "ease-out" });
-        if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {});
-      } catch (e) {}
+    if (hide) {
+      hideElement(el, kind);
     } else {
-      try {
-        const anim = el.animate(transFrames(kind, true), { duration: dur, easing: "ease-in" });
-        const onDone = function () {
-          if ((el as any)._bT === tk && (el as any)._bHide && el.isConnected) el.hidden = true;
-        };
-        if (anim && anim.finished && anim.finished.then) anim.finished.then(onDone, onDone);
-        else setTimeout(onDone, dur);
-      } catch (e) {
-        el.hidden = true;
-      }
+      showElement(el, kind);
     }
   }
 
@@ -899,9 +916,9 @@ export const Laghu: LaghuAPI = (() => {
       if (typeof el.animate !== "function") return;
       const dur = transDur(el);
       try {
-        const anim = el.animate(transFrames(kind, false), { duration: dur, easing: "ease-out" });
+        const anim = el.animate(transFramesEnter(kind), { duration: dur, easing: "ease-out" });
         if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {});
-      } catch (e) {}
+      } catch {}
     });
   }
 
@@ -918,7 +935,7 @@ export const Laghu: LaghuAPI = (() => {
       for (let i = 0; i < node._bcu.length; i++) {
         try {
           node._bcu[i]();
-        } catch (e) {}
+        } catch {}
       }
       node._bcu = [];
     }
@@ -926,7 +943,7 @@ export const Laghu: LaghuAPI = (() => {
     if (node._bReq) {
       try {
         node._bReq.abort();
-      } catch (e) {}
+      } catch {}
       node._bReq = null;
     }
   }
@@ -943,7 +960,7 @@ export const Laghu: LaghuAPI = (() => {
     if (!raw) return {};
     try {
       return JSON.parse(raw);
-    } catch (e) {
+    } catch {
       warnDev("[laghu] data-scope must be JSON. Got: " + raw);
       return {};
     }
@@ -1046,9 +1063,69 @@ export const Laghu: LaghuAPI = (() => {
     return out;
   }
 
+  function bindEveryTrigger(triggerInfo: TriggerSpec, fire: (e: Event) => void, cleanups: Array<Function>): void {
+    if (!triggerInfo.every) return;
+    const intervalId = setInterval(() => {
+      fire(new CustomEvent("laghu:poll"));
+    }, triggerInfo.every);
+    cleanups.push(() => clearInterval(intervalId));
+  }
+
+  function bindLoadTrigger(triggerInfo: TriggerSpec, fire: (e: Event) => void, cleanups: Array<Function>): void {
+    if (!triggerInfo.load) return;
+    if (typeof document !== "undefined" && document.readyState === "loading") {
+      const onLoad = () => fire(new CustomEvent("laghu:load"));
+      document.addEventListener("DOMContentLoaded", onLoad, { once: true });
+      cleanups.push(() => document.removeEventListener("DOMContentLoaded", onLoad));
+    } else {
+      const runNow = () => fire(new CustomEvent("laghu:load"));
+      if (typeof queueMicrotask !== "undefined") queueMicrotask(runNow);
+      else setTimeout(runNow, 0);
+    }
+  }
+
+  function bindRevealedTrigger(
+    el: Element,
+    triggerInfo: TriggerSpec,
+    fire: (e: Event) => void,
+    cleanups: Array<Function>,
+  ): void {
+    if (!triggerInfo.revealed) return;
+    if (typeof IntersectionObserver !== "undefined") {
+      const observerInstance = new IntersectionObserver((entries) => {
+        entries.forEach((entry: any) => {
+          if (entry.isIntersecting) {
+            fire(new CustomEvent("laghu:revealed"));
+            if (triggerInfo.once) observerInstance.disconnect();
+          }
+        });
+      });
+      observerInstance.observe(el);
+      cleanups.push(() => observerInstance.disconnect());
+    } else {
+      fire(new CustomEvent("laghu:revealed"));
+    }
+  }
+
+  function resolveListenTarget(el: Element, from: string): any {
+    if (from === "document" && typeof document !== "undefined") return document;
+    if (from === "body" && typeof document !== "undefined") return document.body;
+    return el;
+  }
+
   function bindTrigger(el: Element, spec: string, fn: (e: Event) => void): () => void {
     const triggerInfo = parseTrigger(spec, el);
     const triggerState: any = { timer: 0, lastFire: 0, lastVal: null };
+    const cleanups: Array<Function> = [];
+
+    const cleanup = function () {
+      for (let ci = 0; ci < cleanups.length; ci++) {
+        try {
+          cleanups[ci]();
+        } catch {}
+      }
+      clearTimeout(triggerState.timer);
+    };
 
     const fire = function (e: Event) {
       const input: any = el;
@@ -1078,22 +1155,7 @@ export const Laghu: LaghuAPI = (() => {
       }
     };
 
-    const cleanups: Array<Function> = [];
-    const cleanup = function () {
-      for (let ci = 0; ci < cleanups.length; ci++) {
-        try {
-          cleanups[ci]();
-        } catch (e) {}
-      }
-      clearTimeout(triggerState.timer);
-    };
-
-    let listenTarget = el as any;
-    if (triggerInfo.from === "document" && typeof document !== "undefined") {
-      listenTarget = document;
-    } else if (triggerInfo.from === "body" && typeof document !== "undefined") {
-      listenTarget = document.body;
-    } else if (triggerInfo.from && typeof document !== "undefined") {
+    if (triggerInfo.from && triggerInfo.from !== "document" && triggerInfo.from !== "body" && typeof document !== "undefined") {
       const docRoot = document;
       const delegator = function (ev: Event) {
         const tgt = ev.target as any;
@@ -1105,42 +1167,11 @@ export const Laghu: LaghuAPI = (() => {
       return cleanup;
     }
 
-    if (triggerInfo.every) {
-      const intervalId = setInterval(() => {
-        fire(new CustomEvent("laghu:poll"));
-      }, triggerInfo.every);
-      cleanups.push(() => clearInterval(intervalId));
-    }
+    bindEveryTrigger(triggerInfo, fire, cleanups);
+    bindLoadTrigger(triggerInfo, fire, cleanups);
+    bindRevealedTrigger(el, triggerInfo, fire, cleanups);
 
-    if (triggerInfo.load) {
-      if (typeof document !== "undefined" && document.readyState === "loading") {
-        const onLoad = () => fire(new CustomEvent("laghu:load"));
-        document.addEventListener("DOMContentLoaded", onLoad, { once: true });
-        cleanups.push(() => document.removeEventListener("DOMContentLoaded", onLoad));
-      } else {
-        const runNow = () => fire(new CustomEvent("laghu:load"));
-        if (typeof queueMicrotask !== "undefined") queueMicrotask(runNow);
-        else setTimeout(runNow, 0);
-      }
-    }
-
-    if (triggerInfo.revealed) {
-      if (typeof IntersectionObserver !== "undefined") {
-        const observerInstance = new IntersectionObserver((entries) => {
-          entries.forEach((entry: any) => {
-            if (entry.isIntersecting) {
-              fire(new CustomEvent("laghu:revealed"));
-              if (triggerInfo.once) observerInstance.disconnect();
-            }
-          });
-        });
-        observerInstance.observe(el);
-        cleanups.push(() => observerInstance.disconnect());
-      } else {
-        fire(new CustomEvent("laghu:revealed"));
-      }
-    }
-
+    const listenTarget = resolveListenTarget(el, triggerInfo.from);
     listenTarget.addEventListener(triggerInfo.on, fire);
     cleanups.push(() => listenTarget.removeEventListener(triggerInfo.on, fire));
     onCleanup(el, cleanup);
@@ -1168,7 +1199,7 @@ export const Laghu: LaghuAPI = (() => {
   filters.set("json", (v: any) => {
     try {
       return JSON.stringify(v);
-    } catch (e) {
+    } catch {
       return String(v);
     }
   });
@@ -1321,29 +1352,47 @@ export const Laghu: LaghuAPI = (() => {
     });
   }
 
-  function bindModelInput(el: any, scope: any, path: string, isCheck: boolean, isRadio: boolean, isSelect: boolean): void {
+  function syncCheckboxModel(el: any, scope: any, path: string): void {
+    const cur = evalExpr(scope, path);
+    if (Array.isArray(cur)) {
+      const arr = cur.slice();
+      const ix = arr.indexOf(el.value);
+      if (el.checked && ix < 0) arr.push(el.value);
+      if (!el.checked && ix >= 0) arr.splice(ix, 1);
+      setPath(scope, path, arr);
+    } else {
+      setPath(scope, path, el.checked);
+    }
+  }
+
+  function syncSelectModel(el: any, scope: any, path: string): void {
+    const selectedValues: string[] = [];
+    Array.prototype.forEach.call(el.options, (opt: any) => {
+      if (opt.selected) selectedValues.push(opt.value);
+    });
+    setPath(scope, path, selectedValues);
+  }
+
+  function syncValueModel(el: any, scope: any, path: string): void {
+    if (el.type === "number") {
+      setPath(scope, path, el.value === "" ? null : Number(el.value));
+    } else {
+      setPath(scope, path, el.value);
+    }
+  }
+
+  function bindModelInput(el: any, scope: any, path: string): void {
+    const isCheck = el.type === "checkbox";
+    const isRadio = el.type === "radio";
+    const isSelect = el.tagName === "SELECT" && el.multiple;
+
     const handler = function () {
       if (isCheck) {
-        const cur = evalExpr(scope, path);
-        if (Array.isArray(cur)) {
-          const arr = cur.slice();
-          const ix = arr.indexOf(el.value);
-          if (el.checked && ix < 0) arr.push(el.value);
-          if (!el.checked && ix >= 0) arr.splice(ix, 1);
-          setPath(scope, path, arr);
-        } else {
-          setPath(scope, path, el.checked);
-        }
+        syncCheckboxModel(el, scope, path);
       } else if (isSelect) {
-        const selectedValues: string[] = [];
-        Array.prototype.forEach.call(el.options, (opt: any) => {
-          if (opt.selected) selectedValues.push(opt.value);
-        });
-        setPath(scope, path, selectedValues);
-      } else if (el.type === "number") {
-        setPath(scope, path, el.value === "" ? null : Number(el.value));
+        syncSelectModel(el, scope, path);
       } else {
-        setPath(scope, path, el.value);
+        syncValueModel(el, scope, path);
       }
     };
     const eventName = isCheck || isRadio || el.tagName === "SELECT" ? "change" : "input";
@@ -1380,7 +1429,7 @@ export const Laghu: LaghuAPI = (() => {
         }
       });
       onCleanup(el, stop);
-      bindModelInput(el, scope, path, isCheck, isRadio, isSelect);
+      bindModelInput(el, scope, path);
     });
   }
 
@@ -1407,6 +1456,38 @@ export const Laghu: LaghuAPI = (() => {
     });
   }
 
+  function mountIfBranch(
+    tpl: HTMLTemplateElement,
+    anchor: Comment,
+    scope: any,
+    actions: Record<string, Function>,
+  ): DocumentFragment | null {
+    const frag = tpl.content.cloneNode(true) as DocumentFragment;
+    if (anchor.parentNode) {
+      anchor.parentNode.insertBefore(frag, anchor.nextSibling);
+      if (anchor.parentNode instanceof Element) {
+        hydrate(anchor.parentNode, scope, actions);
+        let current = anchor.nextSibling;
+        while (current && current !== tpl) {
+          const next = current.nextSibling;
+          if (current instanceof Element) playEnter(current);
+          current = next;
+        }
+      }
+    }
+    return frag;
+  }
+
+  function unmountIfBranch(anchor: Comment, tpl: HTMLTemplateElement): void {
+    let current = anchor.nextSibling;
+    while (current && current !== tpl) {
+      const next = current.nextSibling;
+      if (current instanceof Element) destroyTree(current);
+      if (current.parentNode) current.parentNode.removeChild(current);
+      current = next;
+    }
+  }
+
   function bindTemplateIf(root: Element, scope: any, actions: Record<string, Function>): void {
     eachEl(root, "template[data-if]", (node: Element) => {
       const tpl = node as HTMLTemplateElement;
@@ -1419,31 +1500,108 @@ export const Laghu: LaghuAPI = (() => {
       const stop = effect(() => {
         const on = !!evalExpr(scope, expr);
         if (on && !frag) {
-          frag = tpl.content.cloneNode(true) as DocumentFragment;
-          if (anchor.parentNode) {
-            anchor.parentNode.insertBefore(frag, anchor.nextSibling);
-            if (anchor.parentNode instanceof Element) {
-              hydrate(anchor.parentNode, scope, actions);
-              let nn = anchor.nextSibling;
-              while (nn && nn !== tpl) {
-                const nx2 = nn.nextSibling;
-                if (nn instanceof Element) playEnter(nn);
-                nn = nx2;
-              }
-            }
-          }
+          frag = mountIfBranch(tpl, anchor, scope, actions);
         } else if (!on && frag) {
-          let current = anchor.nextSibling;
-          while (current && current !== tpl) {
-            const next = current.nextSibling;
-            if (current instanceof Element) destroyTree(current);
-            if (current.parentNode) current.parentNode.removeChild(current);
-            current = next;
-          }
+          unmountIfBranch(anchor, tpl);
           frag = null;
         }
       });
       onCleanup(tpl, stop);
+    });
+  }
+
+  function resolveRowKey(item: any, keyExpr: string, itemVar: string, scope: any, index: number): any {
+    if (!keyExpr) return index;
+    let key = evalExpr(item, keyExpr);
+    if (key === undefined || key === null) {
+      const tmpVars: Record<string, any> = { [itemVar]: item };
+      key = evalExpr(childScope(scope, tmpVars), keyExpr);
+    }
+    return key !== undefined && key !== null ? key : index;
+  }
+
+  function mountRow(
+    tpl: HTMLTemplateElement,
+    parent: Node,
+    anchor: Comment,
+    key: any,
+    item: any,
+    itemVar: string,
+    idxVar: string | undefined,
+    index: number,
+    scope: any,
+    actions: Record<string, Function>,
+  ): { nodes: Node[]; scope: any } {
+    const rsVars: Record<string, any> = { [itemVar]: item };
+    if (idxVar) rsVars[idxVar] = index;
+    const rs = childScope(scope, rsVars);
+    const frag = tpl.content.cloneNode(true) as DocumentFragment;
+    const holder = document.createElement("span");
+    holder.style.display = "contents";
+    holder.setAttribute("data-bkey", String(key));
+    holder.appendChild(frag);
+    parent.insertBefore(holder, anchor);
+    hydrate(holder, rs, actions);
+    playEnter(holder);
+    return { nodes: [holder], scope: rs };
+  }
+
+  function updateRow(
+    row: { nodes: Node[]; scope: any },
+    item: any,
+    itemVar: string,
+    idxVar: string | undefined,
+    index: number,
+    actions: Record<string, Function>,
+  ): void {
+    const prevItem = row.scope[itemVar];
+    const prevIdx = idxVar ? row.scope[idxVar] : -1;
+    row.scope[itemVar] = item;
+    if (idxVar) row.scope[idxVar] = index;
+    if (prevItem !== item || (idxVar && prevIdx !== index)) {
+      const h0 = row.nodes[0] as Element;
+      destroyTree(h0);
+      hydrate(h0, row.scope, actions);
+    }
+  }
+
+  function reorderRows(parent: Node, anchor: Comment, order: any[], rows: Map<any, { nodes: Node[]; scope: any }>): void {
+    const seq: string[] = [];
+    const children = parent.childNodes;
+    for (let q = 0; q < children.length; q++) {
+      const child = children[q];
+      if (child.nodeType === 1 && (child as Element).hasAttribute("data-bkey")) {
+        seq.push((child as Element).getAttribute("data-bkey") || "");
+      }
+    }
+
+    let sameOrder = seq.length === order.length;
+    if (sameOrder) {
+      for (let k = 0; k < order.length; k++) {
+        if (seq[k] !== String(order[k])) {
+          sameOrder = false;
+          break;
+        }
+      }
+    }
+
+    if (!sameOrder) {
+      for (let j = 0; j < order.length; j++) {
+        const r2 = rows.get(order[j])!;
+        parent.insertBefore(r2.nodes[0], anchor);
+      }
+    }
+  }
+
+  function cleanupRemovedRows(rows: Map<any, { nodes: Node[]; scope: any }>, seen: Set<any>): void {
+    rows.forEach((rObj, k) => {
+      if (!seen.has(k)) {
+        rObj.nodes.forEach((n) => {
+          destroyTree(n as Element);
+          if (n.parentNode) n.parentNode.removeChild(n);
+        });
+        rows.delete(k);
+      }
     });
   }
 
@@ -1470,80 +1628,20 @@ export const Laghu: LaghuAPI = (() => {
     const order: any[] = [];
     for (let i = 0; i < list.length; i++) {
       const item = list[i];
-      let key: any = i;
-      if (keyExpr) {
-        let ki = evalExpr(item, keyExpr);
-        if (ki === undefined || ki === null) {
-          const tmpVars: Record<string, any> = { [itemVar]: item };
-          ki = evalExpr(childScope(scope, tmpVars), keyExpr);
-        }
-        if (ki !== undefined && ki !== null) key = ki;
-      }
+      const key = resolveRowKey(item, keyExpr, itemVar, scope, i);
       seen.add(key);
       order.push(key);
 
       const row = rows.get(key);
       if (!row) {
-        const rsVars: Record<string, any> = { [itemVar]: item };
-        if (idxVar) rsVars[idxVar] = i;
-        const rs = childScope(scope, rsVars);
-        const frag = tpl.content.cloneNode(true) as DocumentFragment;
-        const holder = document.createElement("span");
-        holder.style.display = "contents";
-        holder.setAttribute("data-bkey", String(key));
-        holder.appendChild(frag);
-        parent.insertBefore(holder, anchor);
-        hydrate(holder, rs, actions);
-        playEnter(holder);
-        rows.set(key, { nodes: [holder], scope: rs });
+        rows.set(key, mountRow(tpl, parent, anchor, key, item, itemVar, idxVar, i, scope, actions));
       } else {
-        const prevItem = row.scope[itemVar];
-        const prevIdx = idxVar ? row.scope[idxVar] : -1;
-        row.scope[itemVar] = item;
-        if (idxVar) row.scope[idxVar] = i;
-        if (prevItem !== item || (idxVar && prevIdx !== i)) {
-          const h0 = row.nodes[0] as Element;
-          destroyTree(h0);
-          hydrate(h0, row.scope, actions);
-        }
+        updateRow(row, item, itemVar, idxVar, i, actions);
       }
     }
 
-    const seq: string[] = [];
-    const children = parent.childNodes;
-    for (let q = 0; q < children.length; q++) {
-      const child = children[q];
-      if (child.nodeType === 1 && (child as Element).hasAttribute("data-bkey")) {
-        seq.push((child as Element).getAttribute("data-bkey") || "");
-      }
-    }
-
-    let sameOrder = seq.length === order.length;
-    if (sameOrder) {
-      for (let k = 0; k < order.length; k++) {
-        if (seq[k] !== String(order[k])) {
-          sameOrder = false;
-          break;
-        }
-      }
-    }
-
-    if (!sameOrder) {
-      for (let j = 0; j < order.length; j++) {
-        const r2 = rows.get(order[j])!;
-        parent.insertBefore(r2.nodes[0], anchor);
-      }
-    }
-
-    rows.forEach((rObj, k) => {
-      if (!seen.has(k)) {
-        rObj.nodes.forEach((n) => {
-          destroyTree(n as Element);
-          if (n.parentNode) n.parentNode.removeChild(n);
-        });
-        rows.delete(k);
-      }
-    });
+    reorderRows(parent, anchor, order, rows);
+    cleanupRemovedRows(rows, seen);
   }
 
   function bindTemplateFor(root: Element, scope: any, actions: Record<string, Function>): void {
@@ -1601,7 +1699,7 @@ export const Laghu: LaghuAPI = (() => {
             if (mods.indexOf("once") >= 0) {
               try {
                 (el as any).removeAttribute(attr.name);
-              } catch (err) {}
+              } catch {}
             }
           });
         }
@@ -1640,6 +1738,45 @@ export const Laghu: LaghuAPI = (() => {
     });
   }
 
+  function buildQueryString(values: Record<string, any>): string {
+    const queryParts: string[] = [];
+    for (const key in values) {
+      const val = values[key];
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+          queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(val[i])));
+        }
+      } else {
+        queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(val)));
+      }
+    }
+    return queryParts.join("&");
+  }
+
+  function resolveRequestPayload(el: HTMLElement): Record<string, any> | null {
+    const valsRaw = el.getAttribute("data-vals");
+    const hostForm = el instanceof HTMLFormElement ? el : el.closest("form");
+    if (valsRaw) {
+      const wantForm = valsRaw.trim() === "form";
+      const values = wantForm ? (hostForm ? serializeForm(hostForm) : {}) : tryJSON(valsRaw) || {};
+      if (hostForm && !wantForm) {
+        const formVals = serializeForm(hostForm as HTMLFormElement);
+        for (const k in formVals) values[k] = formVals[k];
+      }
+      return values;
+    }
+    if (hostForm) {
+      return serializeForm(hostForm as HTMLFormElement);
+    }
+    return null;
+  }
+
+  function applyCustomHeaders(headers: Record<string, string>, rawHeaders: string | null): void {
+    if (!rawHeaders) return;
+    const parsed = tryJSON(rawHeaders) || {};
+    for (const key in parsed) headers[key] = parsed[key];
+  }
+
   function buildFetchOptions(el: HTMLElement, method: string, ctrl: AbortController | null): { opts: any; urlSuffix: string } {
     const opts: any = {
       method: method,
@@ -1647,44 +1784,36 @@ export const Laghu: LaghuAPI = (() => {
       signal: ctrl ? ctrl.signal : undefined,
     };
     let urlSuffix = "";
-    const valsRaw = el.getAttribute("data-vals");
-    if (valsRaw) {
-      const wantForm = valsRaw.trim() === "form";
-      const hostForm = el instanceof HTMLFormElement ? el : el.closest("form");
-      const values = wantForm ? (hostForm ? serializeForm(hostForm) : {}) : tryJSON(valsRaw) || {};
-      if (hostForm && !wantForm) {
-        const formVals = serializeForm(hostForm as HTMLFormElement);
-        for (const k in formVals) values[k] = formVals[k];
-      }
+    const hasVals = el.hasAttribute("data-vals");
+    const payload = resolveRequestPayload(el);
+
+    if (payload) {
       if (method === "GET") {
-        const queryParts: string[] = [];
-        for (const qk in values) {
-          if (Array.isArray(values[qk])) {
-            for (let qi = 0; qi < values[qk].length; qi++) {
-              queryParts.push(encodeURIComponent(qk) + "=" + encodeURIComponent(String(values[qk][qi])));
-            }
-          } else {
-            queryParts.push(encodeURIComponent(qk) + "=" + encodeURIComponent(String(values[qk])));
-          }
-        }
-        if (queryParts.length) urlSuffix = queryParts.join("&");
+        if (hasVals) urlSuffix = buildQueryString(payload);
       } else {
         opts.headers["Content-Type"] = "application/json";
-        opts.body = JSON.stringify(values);
-      }
-    } else if (method !== "GET") {
-      const formEl = el instanceof HTMLFormElement ? el : el.closest("form");
-      if (formEl) {
-        opts.headers["Content-Type"] = "application/json";
-        opts.body = JSON.stringify(serializeForm(formEl as HTMLFormElement));
+        opts.body = JSON.stringify(payload);
       }
     }
-    const headersRaw = el.getAttribute("data-headers");
-    if (headersRaw) {
-      const parsedHeaders = tryJSON(headersRaw) || {};
-      for (const hk in parsedHeaders) opts.headers[hk] = parsedHeaders[hk];
-    }
+    applyCustomHeaders(opts.headers, el.getAttribute("data-headers"));
     return { opts, urlSuffix };
+  }
+
+  function applyJsonResponse(data: any, scope: any): void {
+    setPath(scope, "$error", null);
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      Object.assign(scope, data);
+    } else {
+      setPath(scope, "result", data);
+    }
+  }
+
+  function extractHtmlFragment(html: string, selector: string | null): string {
+    if (!selector) return html;
+    const template = document.createElement("template");
+    template.innerHTML = sanitize(html);
+    const selected = template.content.querySelector(selector);
+    return selected ? selected.outerHTML : "";
   }
 
   function handleFetchResponse(
@@ -1708,28 +1837,56 @@ export const Laghu: LaghuAPI = (() => {
     }
     const contentType = (res.headers.get("content-type") || "").toLowerCase();
     if (contentType.indexOf("json") >= 0) {
-      return res.json().then((data: any) => {
-        setPath(scope, "$error", null);
-        if (data && typeof data === "object" && !Array.isArray(data)) {
-          Object.assign(scope, data);
-        } else {
-          setPath(scope, "result", data);
-        }
-      });
+      return res.json().then((data: any) => applyJsonResponse(data, scope));
     }
     return res.text().then((textHtml: string) => {
-      let finalHtml = textHtml;
-      const selectSel = el.getAttribute("data-select");
-      if (selectSel) {
-        const tmp = document.createElement("template");
-        tmp.innerHTML = sanitize(textHtml);
-        const picked = tmp.content.querySelector(selectSel);
-        finalHtml = picked ? picked.outerHTML : "";
-      }
+      const finalHtml = extractHtmlFragment(textHtml, el.getAttribute("data-select"));
       const target = targetSel ? document.querySelector(targetSel) : el;
-      if (!target) return;
-      swapHtml(target as Element, finalHtml, swap, scope, actions);
+      if (target) swapHtml(target as Element, finalHtml, swap, scope, actions);
     });
+  }
+
+  function updateElementBusyState(el: HTMLElement, isBusy: boolean): void {
+    const indicatorSelector = el.getAttribute("data-indicator");
+    const indicator = indicatorSelector ? document.querySelector(indicatorSelector) : null;
+    if (indicator && indicator instanceof HTMLElement) indicator.hidden = !isBusy;
+    if (isBusy) {
+      el.setAttribute("data-request", "");
+      el.setAttribute("data-pending", "");
+    } else {
+      el.removeAttribute("data-request");
+      el.removeAttribute("data-pending");
+    }
+    if (el.hasAttribute("data-disable")) el.toggleAttribute("disabled", isBusy);
+  }
+
+  function shouldQueueRequest(host: any, queueMode: string): boolean {
+    if (!host._bReqs) host._bReqs = new Set();
+    if (host._bN > 0 && (queueMode === "first" || queueMode === "none")) return false;
+    if (queueMode === "last") {
+      host._bReqs.forEach((controller: any) => {
+        try {
+          controller.abort();
+        } catch {}
+      });
+      host._bReqs.clear();
+    }
+    return true;
+  }
+
+  function handleFetchError(el: HTMLElement, err: any, scope: any, timedOut: boolean): void {
+    if (err && err.name === "AbortError" && !timedOut) return;
+    setPath(scope, "$error", {
+      message: String((err && err.message) || err),
+      timeout: timedOut,
+    });
+    el.dispatchEvent(
+      new CustomEvent("laghu:request-error", {
+        bubbles: true,
+        detail: { error: err, timeout: timedOut },
+      }),
+    );
+    reportError(err);
   }
 
   function doFetch(
@@ -1742,16 +1899,8 @@ export const Laghu: LaghuAPI = (() => {
   ): void {
     const triggerData = parseTrigger(el.getAttribute("data-trigger") || defaultEvent(el), el);
     const self = el as any;
-    if (!self._bReqs) self._bReqs = new Set();
-    if (self._bN > 0 && (triggerData.queue === "first" || triggerData.queue === "none")) return;
-    if (triggerData.queue === "last") {
-      self._bReqs.forEach((c: any) => {
-        try {
-          c.abort();
-        } catch (e) {}
-      });
-      self._bReqs.clear();
-    }
+    if (!shouldQueueRequest(self, triggerData.queue)) return;
+
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     if (ctrl) self._bReqs.add(ctrl);
     self._bN = (self._bN || 0) + 1;
@@ -1764,25 +1913,12 @@ export const Laghu: LaghuAPI = (() => {
         timedOut = true;
         try {
           ctrl.abort();
-        } catch (e) {}
+        } catch {}
       }, timeoutMs);
     }
 
     const actions = self._bActions;
-    const setBusy = (on: boolean) => {
-      const indSel = el.getAttribute("data-indicator");
-      const ind = indSel ? document.querySelector(indSel) : null;
-      if (ind && ind instanceof HTMLElement) ind.hidden = !on;
-      if (on) {
-        el.setAttribute("data-request", "");
-        el.setAttribute("data-pending", "");
-      } else {
-        el.removeAttribute("data-request");
-        el.removeAttribute("data-pending");
-      }
-      if (el.hasAttribute("data-disable")) el.toggleAttribute("disabled", on);
-    };
-    setBusy(true);
+    updateElementBusyState(el, true);
 
     const beforeEvt = new CustomEvent("laghu:before-request", {
       bubbles: true,
@@ -1797,7 +1933,7 @@ export const Laghu: LaghuAPI = (() => {
       if (timer) clearTimeout(timer);
       if (ctrl) self._bReqs.delete(ctrl);
       self._bN = Math.max(0, self._bN - 1);
-      setBusy(false);
+      updateElementBusyState(el, false);
     }
 
     if (!el.dispatchEvent(beforeEvt)) {
@@ -1824,18 +1960,7 @@ export const Laghu: LaghuAPI = (() => {
       })
       .catch((err: any) => {
         finish();
-        if (err && err.name === "AbortError" && !timedOut) return;
-        setPath(scope, "$error", {
-          message: String((err && err.message) || err),
-          timeout: timedOut,
-        });
-        el.dispatchEvent(
-          new CustomEvent("laghu:request-error", {
-            bubbles: true,
-            detail: { error: err, timeout: timedOut },
-          }),
-        );
-        reportError(err);
+        handleFetchError(el, err, scope, timedOut);
       });
   }
 
@@ -1900,7 +2025,7 @@ export const Laghu: LaghuAPI = (() => {
   function tryJSON(s: string): any {
     try {
       return JSON.parse(s);
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -1951,7 +2076,7 @@ export const Laghu: LaghuAPI = (() => {
             ? CSS.escape(id)
             : String(id).replace(/([^a-zA-Z0-9_-])/g, "\\$1");
         sel = "#" + escaped;
-      } catch (e) {
+      } catch {
         sel = '[id="' + String(id).replace(/"/g, "") + '"]';
       }
       let fresh = target.querySelector(sel);
@@ -1968,16 +2093,16 @@ export const Laghu: LaghuAPI = (() => {
     if (focusedEl && focusedEl instanceof HTMLElement) {
       try {
         focusedEl.focus({ preventScroll: true });
-      } catch (e) {
+      } catch {
         try {
           focusedEl.focus();
-        } catch (e2) {}
+        } catch {}
       }
       try {
         if (selStart >= 0 && (focusedEl as any).setSelectionRange) {
           (focusedEl as any).setSelectionRange(selStart, selEnd);
         }
-      } catch (e) {}
+      } catch {}
     }
   }
 
@@ -2061,7 +2186,7 @@ export const Laghu: LaghuAPI = (() => {
         try {
           initial[key] = element[key];
           delete element[key];
-        } catch (e) {}
+        } catch {}
       }
     }
   }

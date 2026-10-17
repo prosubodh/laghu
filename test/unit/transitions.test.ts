@@ -196,6 +196,8 @@ describe("transitions", () => {
     let doneCallback: any;
     (window.HTMLElement.prototype as any).animate = () => ({
       finished: {
+        // oxlint-disable-next-line unicorn/no-thenable
+        /* eslint-disable-next-line unicorn/no-thenable */
         then: (onDone: any) => {
           doneCallback = onDone;
         },
@@ -224,7 +226,7 @@ describe("transitions", () => {
 
   it("covers playEnter animation without catch method", async () => {
     (window.HTMLElement.prototype as any).animate = () => ({
-      finished: { then: () => {} },
+      finished: {},
     });
     (window as any).matchMedia = () => ({ matches: false });
     const root = document.createElement("div");

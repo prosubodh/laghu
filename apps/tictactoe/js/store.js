@@ -1,12 +1,12 @@
 /* TicTacToe shared state. One store, read by the board, the status
  * line, and the scoreboard. Cells are objects (not primitives) so row
  * actions can mutate them without scope shadowing. See apps/README. */
-var TttStore = (function () {
+const TttStore = (function () {
   "use strict";
 
   function freshCells() {
-    var out = [];
-    for (var i = 0; i < 9; i++) out.push({ id: i, v: null, win: false });
+    const out = [];
+    for (let i = 0; i < 9; i++) out.push({ id: i, v: null, win: false });
     return out;
   }
 
@@ -21,12 +21,12 @@ var TttStore = (function () {
   }
 
   function refresh(store) {
-    var vals = store.cells.map(function (c) {
+    const vals = store.cells.map(function (c) {
       return c.v;
     });
-    var w = TttGame.winnerOf(vals);
+    const w = TttGame.winnerOf(vals);
     store.winner = w;
-    for (var i = 0; i < 9; i++) {
+    for (let i = 0; i < 9; i++) {
       store.cells[i].win = !!(w && w.line.indexOf(i) >= 0);
     }
     if (w) store.score[w.b]++;
@@ -34,7 +34,7 @@ var TttStore = (function () {
   }
 
   function place(store, i) {
-    var cell = store.cells[i];
+    const cell = store.cells[i];
     if (!cell || cell.v || store.winner) return false;
     cell.v = store.turn;
     if (!store.winner) store.turn = store.turn === "X" ? "O" : "X";
@@ -50,7 +50,7 @@ var TttStore = (function () {
   }
 
   function resetAll(store) {
-    var s = initial();
+    const s = initial();
     store.cells = s.cells;
     store.turn = s.turn;
     store.winner = s.winner;
@@ -66,3 +66,7 @@ var TttStore = (function () {
     resetAll: resetAll,
   };
 })();
+
+if (typeof window !== "undefined") {
+  window.TttStore = TttStore;
+}

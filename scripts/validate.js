@@ -137,7 +137,7 @@ function runValidation(workspaceRoot, reporter = createReporter()) {
   };
 }
 
-function main(argv = process.argv.slice(2), exit = process.exit) {
+function main(argv = process.argv.slice(2), exit = (code) => process.exit(code)) {
   const workspaceRoot = path.resolve(parseArgs(argv));
   const result = runValidation(workspaceRoot);
   return exit(result.errors === 0 ? 0 : 1);

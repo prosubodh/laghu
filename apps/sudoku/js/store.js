@@ -3,10 +3,10 @@
  * through Laghu.set (or direct writes on the store proxy itself).
  * Mistakes count placements that create a conflict. Hints fill from
  * the known solution and never touch givens. */
-var SudokuStore = (function () {
+const SudokuStore = (function () {
   "use strict";
 
-  var SEEDS = { easy: 11, medium: 22, hard: 33 };
+  const SEEDS = { easy: 11, medium: 22, hard: 33 };
 
   function initial() {
     return {
@@ -32,7 +32,7 @@ var SudokuStore = (function () {
   }
 
   function newGame(store, difficulty) {
-    var g = SudokuLib.generate(difficulty, SEEDS[difficulty] || 11);
+    const g = SudokuLib.generate(difficulty, SEEDS[difficulty] || 11);
     store.solution = g.solution;
     store.cells = g.puzzle.map(function (v, i) {
       return { id: i, v: v, given: v !== 0, err: false };
@@ -54,8 +54,8 @@ var SudokuStore = (function () {
   }
 
   function refreshErr(store) {
-    var bad = SudokuLib.conflicts(vals(store));
-    for (var i = 0; i < 81; i++) store.cells[i].err = bad[i] && !store.cells[i].given;
+    const bad = SudokuLib.conflicts(vals(store));
+    for (let i = 0; i < 81; i++) store.cells[i].err = bad[i] && !store.cells[i].given;
   }
 
   function select(store, i) {
@@ -66,7 +66,7 @@ var SudokuStore = (function () {
 
   function input(store, d) {
     if (store.status !== "playing") return;
-    var i = store.selected;
+    const i = store.selected;
     if (i < 0 || store.cells[i].given) return;
     store.cells[i].v = d;
     store.selVal = d;
@@ -77,7 +77,7 @@ var SudokuStore = (function () {
 
   function erase(store) {
     if (store.status !== "playing") return;
-    var i = store.selected;
+    const i = store.selected;
     if (i < 0 || store.cells[i].given) return;
     store.cells[i].v = 0;
     store.selVal = 0;
@@ -86,9 +86,9 @@ var SudokuStore = (function () {
 
   function hint(store) {
     if (store.status !== "playing" || store.hints <= 0) return;
-    var i = store.selected;
+    let i = store.selected;
     if (i < 0 || store.cells[i].given || store.cells[i].v === store.solution[i]) {
-      for (var k = 0; k < 81; k++) {
+      for (let k = 0; k < 81; k++) {
         if (!store.cells[k].given && store.cells[k].v !== store.solution[k]) {
           i = k;
           break;
@@ -105,8 +105,8 @@ var SudokuStore = (function () {
   }
 
   function fmtTime(sec) {
-    var m = Math.floor(sec / 60),
-      s = sec % 60;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
     return (m < 10 ? "0" + m : "" + m) + ":" + (s < 10 ? "0" + s : "" + s);
   }
 
@@ -121,3 +121,7 @@ var SudokuStore = (function () {
     SEEDS: SEEDS,
   };
 })();
+
+if (typeof window !== "undefined") {
+  window.SudokuStore = SudokuStore;
+}

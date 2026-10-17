@@ -65,7 +65,7 @@
             })
           );
         }
-      } catch (e) {
+      } catch {
       }
       errorDev(err);
     }
@@ -581,7 +581,7 @@
       if (root instanceof Element && root.matches) {
         try {
           if (root.matches(selector)) fn(root);
-        } catch (e) {
+        } catch {
         }
       }
       Array.prototype.forEach.call(root.querySelectorAll(selector), fn);
@@ -594,14 +594,46 @@
       });
       return out;
     }
-    function transFrames(kind, out) {
+    function transFramesEnter(kind) {
       const from = kind.indexOf("slide") >= 0 ? "translateY(-8px)" : kind.indexOf("scale") >= 0 ? "scale(.96)" : "none";
-      const a = { opacity: "0", transform: from };
-      const b = { opacity: "1", transform: "none" };
-      return out ? [b, a] : [a, b];
+      return [
+        { opacity: "0", transform: from },
+        { opacity: "1", transform: "none" }
+      ];
+    }
+    function transFramesLeave(kind) {
+      const frames = transFramesEnter(kind);
+      return [frames[1], frames[0]];
     }
     function transDur(el) {
       return parseMs(el.getAttribute("data-duration") || "150ms") || 150;
+    }
+    function showElement(el, kind) {
+      const dur = transDur(el);
+      el._bT = (el._bT || 0) + 1;
+      el._bHide = false;
+      el.hidden = false;
+      try {
+        const anim = el.animate(transFramesEnter(kind), { duration: dur, easing: "ease-out" });
+        if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {
+        });
+      } catch {
+      }
+    }
+    function hideElement(el, kind) {
+      const dur = transDur(el);
+      const token = el._bT = (el._bT || 0) + 1;
+      el._bHide = true;
+      try {
+        const anim = el.animate(transFramesLeave(kind), { duration: dur, easing: "ease-in" });
+        const onDone = function() {
+          if (el._bT === token && el._bHide && el.isConnected) el.hidden = true;
+        };
+        if (anim && anim.finished && anim.finished.then) anim.finished.then(onDone, onDone);
+        else setTimeout(onDone, dur);
+      } catch {
+        el.hidden = true;
+      }
     }
     function setHidden(el, hide) {
       hide = !!hide;
@@ -618,28 +650,10 @@
         el.hidden = hide;
         return;
       }
-      const dur = transDur(el);
-      const tk = el._bT = (el._bT || 0) + 1;
-      el._bHide = hide;
-      if (!hide) {
-        el.hidden = false;
-        try {
-          const anim = el.animate(transFrames(kind, false), { duration: dur, easing: "ease-out" });
-          if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {
-          });
-        } catch (e) {
-        }
+      if (hide) {
+        hideElement(el, kind);
       } else {
-        try {
-          const anim = el.animate(transFrames(kind, true), { duration: dur, easing: "ease-in" });
-          const onDone = function() {
-            if (el._bT === tk && el._bHide && el.isConnected) el.hidden = true;
-          };
-          if (anim && anim.finished && anim.finished.then) anim.finished.then(onDone, onDone);
-          else setTimeout(onDone, dur);
-        } catch (e) {
-          el.hidden = true;
-        }
+        showElement(el, kind);
       }
     }
     function playEnter(root) {
@@ -654,10 +668,10 @@
         if (typeof el.animate !== "function") return;
         const dur = transDur(el);
         try {
-          const anim = el.animate(transFrames(kind, false), { duration: dur, easing: "ease-out" });
+          const anim = el.animate(transFramesEnter(kind), { duration: dur, easing: "ease-out" });
           if (anim && anim.finished && anim.finished.catch) anim.finished.catch(() => {
           });
-        } catch (e) {
+        } catch {
         }
       });
     }
@@ -673,7 +687,7 @@
         for (let i = 0; i < node._bcu.length; i++) {
           try {
             node._bcu[i]();
-          } catch (e) {
+          } catch {
           }
         }
         node._bcu = [];
@@ -682,7 +696,7 @@
       if (node._bReq) {
         try {
           node._bReq.abort();
-        } catch (e) {
+        } catch {
         }
         node._bReq = null;
       }
@@ -698,7 +712,7 @@
       if (!raw) return {};
       try {
         return JSON.parse(raw);
-      } catch (e) {
+      } catch {
         warnDev("[laghu] data-scope must be JSON. Got: " + raw);
         return {};
       }
@@ -792,9 +806,60 @@
       out.on = eventName || defaultEvent(el);
       return out;
     }
+    function bindEveryTrigger(triggerInfo, fire, cleanups) {
+      if (!triggerInfo.every) return;
+      const intervalId = setInterval(() => {
+        fire(new CustomEvent("laghu:poll"));
+      }, triggerInfo.every);
+      cleanups.push(() => clearInterval(intervalId));
+    }
+    function bindLoadTrigger(triggerInfo, fire, cleanups) {
+      if (!triggerInfo.load) return;
+      if (typeof document !== "undefined" && document.readyState === "loading") {
+        const onLoad = () => fire(new CustomEvent("laghu:load"));
+        document.addEventListener("DOMContentLoaded", onLoad, { once: true });
+        cleanups.push(() => document.removeEventListener("DOMContentLoaded", onLoad));
+      } else {
+        const runNow = () => fire(new CustomEvent("laghu:load"));
+        if (typeof queueMicrotask !== "undefined") queueMicrotask(runNow);
+        else setTimeout(runNow, 0);
+      }
+    }
+    function bindRevealedTrigger(el, triggerInfo, fire, cleanups) {
+      if (!triggerInfo.revealed) return;
+      if (typeof IntersectionObserver !== "undefined") {
+        const observerInstance = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              fire(new CustomEvent("laghu:revealed"));
+              if (triggerInfo.once) observerInstance.disconnect();
+            }
+          });
+        });
+        observerInstance.observe(el);
+        cleanups.push(() => observerInstance.disconnect());
+      } else {
+        fire(new CustomEvent("laghu:revealed"));
+      }
+    }
+    function resolveListenTarget(el, from) {
+      if (from === "document" && typeof document !== "undefined") return document;
+      if (from === "body" && typeof document !== "undefined") return document.body;
+      return el;
+    }
     function bindTrigger(el, spec, fn) {
       const triggerInfo = parseTrigger(spec, el);
       const triggerState = { timer: 0, lastFire: 0, lastVal: null };
+      const cleanups = [];
+      const cleanup = function() {
+        for (let ci = 0; ci < cleanups.length; ci++) {
+          try {
+            cleanups[ci]();
+          } catch {
+          }
+        }
+        clearTimeout(triggerState.timer);
+      };
       const fire = function(e) {
         const input = el;
         if (triggerInfo.changed && (hasKey(input, "value") || hasKey(input, "checked"))) {
@@ -816,22 +881,7 @@
           run();
         }
       };
-      const cleanups = [];
-      const cleanup = function() {
-        for (let ci = 0; ci < cleanups.length; ci++) {
-          try {
-            cleanups[ci]();
-          } catch (e) {
-          }
-        }
-        clearTimeout(triggerState.timer);
-      };
-      let listenTarget = el;
-      if (triggerInfo.from === "document" && typeof document !== "undefined") {
-        listenTarget = document;
-      } else if (triggerInfo.from === "body" && typeof document !== "undefined") {
-        listenTarget = document.body;
-      } else if (triggerInfo.from && typeof document !== "undefined") {
+      if (triggerInfo.from && triggerInfo.from !== "document" && triggerInfo.from !== "body" && typeof document !== "undefined") {
         const docRoot = document;
         const delegator = function(ev) {
           const tgt = ev.target;
@@ -842,39 +892,10 @@
         onCleanup(el, cleanup);
         return cleanup;
       }
-      if (triggerInfo.every) {
-        const intervalId = setInterval(() => {
-          fire(new CustomEvent("laghu:poll"));
-        }, triggerInfo.every);
-        cleanups.push(() => clearInterval(intervalId));
-      }
-      if (triggerInfo.load) {
-        if (typeof document !== "undefined" && document.readyState === "loading") {
-          const onLoad = () => fire(new CustomEvent("laghu:load"));
-          document.addEventListener("DOMContentLoaded", onLoad, { once: true });
-          cleanups.push(() => document.removeEventListener("DOMContentLoaded", onLoad));
-        } else {
-          const runNow = () => fire(new CustomEvent("laghu:load"));
-          if (typeof queueMicrotask !== "undefined") queueMicrotask(runNow);
-          else setTimeout(runNow, 0);
-        }
-      }
-      if (triggerInfo.revealed) {
-        if (typeof IntersectionObserver !== "undefined") {
-          const observerInstance = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting) {
-                fire(new CustomEvent("laghu:revealed"));
-                if (triggerInfo.once) observerInstance.disconnect();
-              }
-            });
-          });
-          observerInstance.observe(el);
-          cleanups.push(() => observerInstance.disconnect());
-        } else {
-          fire(new CustomEvent("laghu:revealed"));
-        }
-      }
+      bindEveryTrigger(triggerInfo, fire, cleanups);
+      bindLoadTrigger(triggerInfo, fire, cleanups);
+      bindRevealedTrigger(el, triggerInfo, fire, cleanups);
+      const listenTarget = resolveListenTarget(el, triggerInfo.from);
       listenTarget.addEventListener(triggerInfo.on, fire);
       cleanups.push(() => listenTarget.removeEventListener(triggerInfo.on, fire));
       onCleanup(el, cleanup);
@@ -898,7 +919,7 @@
     filters.set("json", (v) => {
       try {
         return JSON.stringify(v);
-      } catch (e) {
+      } catch {
         return String(v);
       }
     });
@@ -1044,29 +1065,43 @@
         });
       });
     }
-    function bindModelInput(el, scope, path, isCheck, isRadio, isSelect) {
+    function syncCheckboxModel(el, scope, path) {
+      const cur = evalExpr(scope, path);
+      if (Array.isArray(cur)) {
+        const arr = cur.slice();
+        const ix = arr.indexOf(el.value);
+        if (el.checked && ix < 0) arr.push(el.value);
+        if (!el.checked && ix >= 0) arr.splice(ix, 1);
+        setPath(scope, path, arr);
+      } else {
+        setPath(scope, path, el.checked);
+      }
+    }
+    function syncSelectModel(el, scope, path) {
+      const selectedValues = [];
+      Array.prototype.forEach.call(el.options, (opt) => {
+        if (opt.selected) selectedValues.push(opt.value);
+      });
+      setPath(scope, path, selectedValues);
+    }
+    function syncValueModel(el, scope, path) {
+      if (el.type === "number") {
+        setPath(scope, path, el.value === "" ? null : Number(el.value));
+      } else {
+        setPath(scope, path, el.value);
+      }
+    }
+    function bindModelInput(el, scope, path) {
+      const isCheck = el.type === "checkbox";
+      const isRadio = el.type === "radio";
+      const isSelect = el.tagName === "SELECT" && el.multiple;
       const handler = function() {
         if (isCheck) {
-          const cur = evalExpr(scope, path);
-          if (Array.isArray(cur)) {
-            const arr = cur.slice();
-            const ix = arr.indexOf(el.value);
-            if (el.checked && ix < 0) arr.push(el.value);
-            if (!el.checked && ix >= 0) arr.splice(ix, 1);
-            setPath(scope, path, arr);
-          } else {
-            setPath(scope, path, el.checked);
-          }
+          syncCheckboxModel(el, scope, path);
         } else if (isSelect) {
-          const selectedValues = [];
-          Array.prototype.forEach.call(el.options, (opt) => {
-            if (opt.selected) selectedValues.push(opt.value);
-          });
-          setPath(scope, path, selectedValues);
-        } else if (el.type === "number") {
-          setPath(scope, path, el.value === "" ? null : Number(el.value));
+          syncSelectModel(el, scope, path);
         } else {
-          setPath(scope, path, el.value);
+          syncValueModel(el, scope, path);
         }
       };
       const eventName = isCheck || isRadio || el.tagName === "SELECT" ? "change" : "input";
@@ -1101,7 +1136,7 @@
           }
         });
         onCleanup(el, stop);
-        bindModelInput(el, scope, path, isCheck, isRadio, isSelect);
+        bindModelInput(el, scope, path);
       });
     }
     function bindConditionals(root, scope) {
@@ -1125,6 +1160,31 @@
         onCleanup(el, stop);
       });
     }
+    function mountIfBranch(tpl, anchor, scope, actions) {
+      const frag = tpl.content.cloneNode(true);
+      if (anchor.parentNode) {
+        anchor.parentNode.insertBefore(frag, anchor.nextSibling);
+        if (anchor.parentNode instanceof Element) {
+          hydrate(anchor.parentNode, scope, actions);
+          let current = anchor.nextSibling;
+          while (current && current !== tpl) {
+            const next = current.nextSibling;
+            if (current instanceof Element) playEnter(current);
+            current = next;
+          }
+        }
+      }
+      return frag;
+    }
+    function unmountIfBranch(anchor, tpl) {
+      let current = anchor.nextSibling;
+      while (current && current !== tpl) {
+        const next = current.nextSibling;
+        if (current instanceof Element) destroyTree(current);
+        if (current.parentNode) current.parentNode.removeChild(current);
+        current = next;
+      }
+    }
     function bindTemplateIf(root, scope, actions) {
       eachEl(root, "template[data-if]", (node) => {
         const tpl = node;
@@ -1136,82 +1196,50 @@
         const stop = effect(() => {
           const on = !!evalExpr(scope, expr);
           if (on && !frag) {
-            frag = tpl.content.cloneNode(true);
-            if (anchor.parentNode) {
-              anchor.parentNode.insertBefore(frag, anchor.nextSibling);
-              if (anchor.parentNode instanceof Element) {
-                hydrate(anchor.parentNode, scope, actions);
-                let nn = anchor.nextSibling;
-                while (nn && nn !== tpl) {
-                  const nx2 = nn.nextSibling;
-                  if (nn instanceof Element) playEnter(nn);
-                  nn = nx2;
-                }
-              }
-            }
+            frag = mountIfBranch(tpl, anchor, scope, actions);
           } else if (!on && frag) {
-            let current = anchor.nextSibling;
-            while (current && current !== tpl) {
-              const next = current.nextSibling;
-              if (current instanceof Element) destroyTree(current);
-              if (current.parentNode) current.parentNode.removeChild(current);
-              current = next;
-            }
+            unmountIfBranch(anchor, tpl);
             frag = null;
           }
         });
         onCleanup(tpl, stop);
       });
     }
-    function renderRows(tpl, anchor, scope, actions, itemVar, idxVar, listExpr, keyExpr, rows) {
-      let list = evalExpr(scope, listExpr) || [];
-      if (!Array.isArray(list)) {
-        warnDev("[laghu] data-for not array: " + listExpr);
-        list = [];
+    function resolveRowKey(item, keyExpr, itemVar, scope, index) {
+      if (!keyExpr) return index;
+      let key = evalExpr(item, keyExpr);
+      if (key === void 0 || key === null) {
+        const tmpVars = { [itemVar]: item };
+        key = evalExpr(childScope(scope, tmpVars), keyExpr);
       }
-      const parent = anchor.parentNode;
-      if (!parent) return;
-      const seen = /* @__PURE__ */ new Set();
-      const order = [];
-      for (let i = 0; i < list.length; i++) {
-        const item = list[i];
-        let key = i;
-        if (keyExpr) {
-          let ki = evalExpr(item, keyExpr);
-          if (ki === void 0 || ki === null) {
-            const tmpVars = { [itemVar]: item };
-            ki = evalExpr(childScope(scope, tmpVars), keyExpr);
-          }
-          if (ki !== void 0 && ki !== null) key = ki;
-        }
-        seen.add(key);
-        order.push(key);
-        const row = rows.get(key);
-        if (!row) {
-          const rsVars = { [itemVar]: item };
-          if (idxVar) rsVars[idxVar] = i;
-          const rs = childScope(scope, rsVars);
-          const frag = tpl.content.cloneNode(true);
-          const holder = document.createElement("span");
-          holder.style.display = "contents";
-          holder.setAttribute("data-bkey", String(key));
-          holder.appendChild(frag);
-          parent.insertBefore(holder, anchor);
-          hydrate(holder, rs, actions);
-          playEnter(holder);
-          rows.set(key, { nodes: [holder], scope: rs });
-        } else {
-          const prevItem = row.scope[itemVar];
-          const prevIdx = idxVar ? row.scope[idxVar] : -1;
-          row.scope[itemVar] = item;
-          if (idxVar) row.scope[idxVar] = i;
-          if (prevItem !== item || idxVar && prevIdx !== i) {
-            const h0 = row.nodes[0];
-            destroyTree(h0);
-            hydrate(h0, row.scope, actions);
-          }
-        }
+      return key !== void 0 && key !== null ? key : index;
+    }
+    function mountRow(tpl, parent, anchor, key, item, itemVar, idxVar, index, scope, actions) {
+      const rsVars = { [itemVar]: item };
+      if (idxVar) rsVars[idxVar] = index;
+      const rs = childScope(scope, rsVars);
+      const frag = tpl.content.cloneNode(true);
+      const holder = document.createElement("span");
+      holder.style.display = "contents";
+      holder.setAttribute("data-bkey", String(key));
+      holder.appendChild(frag);
+      parent.insertBefore(holder, anchor);
+      hydrate(holder, rs, actions);
+      playEnter(holder);
+      return { nodes: [holder], scope: rs };
+    }
+    function updateRow(row, item, itemVar, idxVar, index, actions) {
+      const prevItem = row.scope[itemVar];
+      const prevIdx = idxVar ? row.scope[idxVar] : -1;
+      row.scope[itemVar] = item;
+      if (idxVar) row.scope[idxVar] = index;
+      if (prevItem !== item || idxVar && prevIdx !== index) {
+        const h0 = row.nodes[0];
+        destroyTree(h0);
+        hydrate(h0, row.scope, actions);
       }
+    }
+    function reorderRows(parent, anchor, order, rows) {
       const seq = [];
       const children = parent.childNodes;
       for (let q = 0; q < children.length; q++) {
@@ -1235,6 +1263,8 @@
           parent.insertBefore(r2.nodes[0], anchor);
         }
       }
+    }
+    function cleanupRemovedRows(rows, seen) {
       rows.forEach((rObj, k) => {
         if (!seen.has(k)) {
           rObj.nodes.forEach((n) => {
@@ -1244,6 +1274,31 @@
           rows.delete(k);
         }
       });
+    }
+    function renderRows(tpl, anchor, scope, actions, itemVar, idxVar, listExpr, keyExpr, rows) {
+      let list = evalExpr(scope, listExpr) || [];
+      if (!Array.isArray(list)) {
+        warnDev("[laghu] data-for not array: " + listExpr);
+        list = [];
+      }
+      const parent = anchor.parentNode;
+      if (!parent) return;
+      const seen = /* @__PURE__ */ new Set();
+      const order = [];
+      for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        const key = resolveRowKey(item, keyExpr, itemVar, scope, i);
+        seen.add(key);
+        order.push(key);
+        const row = rows.get(key);
+        if (!row) {
+          rows.set(key, mountRow(tpl, parent, anchor, key, item, itemVar, idxVar, i, scope, actions));
+        } else {
+          updateRow(row, item, itemVar, idxVar, i, actions);
+        }
+      }
+      reorderRows(parent, anchor, order, rows);
+      cleanupRemovedRows(rows, seen);
     }
     function bindTemplateFor(root, scope, actions) {
       eachEl(root, "template[data-for]", (node) => {
@@ -1297,7 +1352,7 @@
               if (mods.indexOf("once") >= 0) {
                 try {
                   el.removeAttribute(attr.name);
-                } catch (err) {
+                } catch {
                 }
               }
             });
@@ -1334,6 +1389,42 @@
         });
       });
     }
+    function buildQueryString(values) {
+      const queryParts = [];
+      for (const key in values) {
+        const val = values[key];
+        if (Array.isArray(val)) {
+          for (let i = 0; i < val.length; i++) {
+            queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(val[i])));
+          }
+        } else {
+          queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(val)));
+        }
+      }
+      return queryParts.join("&");
+    }
+    function resolveRequestPayload(el) {
+      const valsRaw = el.getAttribute("data-vals");
+      const hostForm = el instanceof HTMLFormElement ? el : el.closest("form");
+      if (valsRaw) {
+        const wantForm = valsRaw.trim() === "form";
+        const values = wantForm ? hostForm ? serializeForm(hostForm) : {} : tryJSON(valsRaw) || {};
+        if (hostForm && !wantForm) {
+          const formVals = serializeForm(hostForm);
+          for (const k in formVals) values[k] = formVals[k];
+        }
+        return values;
+      }
+      if (hostForm) {
+        return serializeForm(hostForm);
+      }
+      return null;
+    }
+    function applyCustomHeaders(headers, rawHeaders) {
+      if (!rawHeaders) return;
+      const parsed = tryJSON(rawHeaders) || {};
+      for (const key in parsed) headers[key] = parsed[key];
+    }
     function buildFetchOptions(el, method, ctrl) {
       const opts = {
         method,
@@ -1341,44 +1432,33 @@
         signal: ctrl ? ctrl.signal : void 0
       };
       let urlSuffix = "";
-      const valsRaw = el.getAttribute("data-vals");
-      if (valsRaw) {
-        const wantForm = valsRaw.trim() === "form";
-        const hostForm = el instanceof HTMLFormElement ? el : el.closest("form");
-        const values = wantForm ? hostForm ? serializeForm(hostForm) : {} : tryJSON(valsRaw) || {};
-        if (hostForm && !wantForm) {
-          const formVals = serializeForm(hostForm);
-          for (const k in formVals) values[k] = formVals[k];
-        }
+      const hasVals = el.hasAttribute("data-vals");
+      const payload = resolveRequestPayload(el);
+      if (payload) {
         if (method === "GET") {
-          const queryParts = [];
-          for (const qk in values) {
-            if (Array.isArray(values[qk])) {
-              for (let qi = 0; qi < values[qk].length; qi++) {
-                queryParts.push(encodeURIComponent(qk) + "=" + encodeURIComponent(String(values[qk][qi])));
-              }
-            } else {
-              queryParts.push(encodeURIComponent(qk) + "=" + encodeURIComponent(String(values[qk])));
-            }
-          }
-          if (queryParts.length) urlSuffix = queryParts.join("&");
+          if (hasVals) urlSuffix = buildQueryString(payload);
         } else {
           opts.headers["Content-Type"] = "application/json";
-          opts.body = JSON.stringify(values);
-        }
-      } else if (method !== "GET") {
-        const formEl = el instanceof HTMLFormElement ? el : el.closest("form");
-        if (formEl) {
-          opts.headers["Content-Type"] = "application/json";
-          opts.body = JSON.stringify(serializeForm(formEl));
+          opts.body = JSON.stringify(payload);
         }
       }
-      const headersRaw = el.getAttribute("data-headers");
-      if (headersRaw) {
-        const parsedHeaders = tryJSON(headersRaw) || {};
-        for (const hk in parsedHeaders) opts.headers[hk] = parsedHeaders[hk];
-      }
+      applyCustomHeaders(opts.headers, el.getAttribute("data-headers"));
       return { opts, urlSuffix };
+    }
+    function applyJsonResponse(data, scope) {
+      setPath(scope, "$error", null);
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        Object.assign(scope, data);
+      } else {
+        setPath(scope, "result", data);
+      }
+    }
+    function extractHtmlFragment(html, selector) {
+      if (!selector) return html;
+      const template = document.createElement("template");
+      template.innerHTML = sanitize(html);
+      const selected = template.content.querySelector(selector);
+      return selected ? selected.outerHTML : "";
     }
     function handleFetchResponse(el, res, scope, url, targetSel, swap, actions) {
       if (!res.ok) {
@@ -1393,43 +1473,59 @@
       }
       const contentType = (res.headers.get("content-type") || "").toLowerCase();
       if (contentType.indexOf("json") >= 0) {
-        return res.json().then((data) => {
-          setPath(scope, "$error", null);
-          if (data && typeof data === "object" && !Array.isArray(data)) {
-            Object.assign(scope, data);
-          } else {
-            setPath(scope, "result", data);
-          }
-        });
+        return res.json().then((data) => applyJsonResponse(data, scope));
       }
       return res.text().then((textHtml) => {
-        let finalHtml = textHtml;
-        const selectSel = el.getAttribute("data-select");
-        if (selectSel) {
-          const tmp = document.createElement("template");
-          tmp.innerHTML = sanitize(textHtml);
-          const picked = tmp.content.querySelector(selectSel);
-          finalHtml = picked ? picked.outerHTML : "";
-        }
+        const finalHtml = extractHtmlFragment(textHtml, el.getAttribute("data-select"));
         const target = targetSel ? document.querySelector(targetSel) : el;
-        if (!target) return;
-        swapHtml(target, finalHtml, swap, scope, actions);
+        if (target) swapHtml(target, finalHtml, swap, scope, actions);
       });
+    }
+    function updateElementBusyState(el, isBusy) {
+      const indicatorSelector = el.getAttribute("data-indicator");
+      const indicator = indicatorSelector ? document.querySelector(indicatorSelector) : null;
+      if (indicator && indicator instanceof HTMLElement) indicator.hidden = !isBusy;
+      if (isBusy) {
+        el.setAttribute("data-request", "");
+        el.setAttribute("data-pending", "");
+      } else {
+        el.removeAttribute("data-request");
+        el.removeAttribute("data-pending");
+      }
+      if (el.hasAttribute("data-disable")) el.toggleAttribute("disabled", isBusy);
+    }
+    function shouldQueueRequest(host, queueMode) {
+      if (!host._bReqs) host._bReqs = /* @__PURE__ */ new Set();
+      if (host._bN > 0 && (queueMode === "first" || queueMode === "none")) return false;
+      if (queueMode === "last") {
+        host._bReqs.forEach((controller) => {
+          try {
+            controller.abort();
+          } catch {
+          }
+        });
+        host._bReqs.clear();
+      }
+      return true;
+    }
+    function handleFetchError(el, err, scope, timedOut) {
+      if (err && err.name === "AbortError" && !timedOut) return;
+      setPath(scope, "$error", {
+        message: String(err && err.message || err),
+        timeout: timedOut
+      });
+      el.dispatchEvent(
+        new CustomEvent("laghu:request-error", {
+          bubbles: true,
+          detail: { error: err, timeout: timedOut }
+        })
+      );
+      reportError(err);
     }
     function doFetch(el, scope, method, url, targetSel, swap) {
       const triggerData = parseTrigger(el.getAttribute("data-trigger") || defaultEvent(el), el);
       const self = el;
-      if (!self._bReqs) self._bReqs = /* @__PURE__ */ new Set();
-      if (self._bN > 0 && (triggerData.queue === "first" || triggerData.queue === "none")) return;
-      if (triggerData.queue === "last") {
-        self._bReqs.forEach((c) => {
-          try {
-            c.abort();
-          } catch (e) {
-          }
-        });
-        self._bReqs.clear();
-      }
+      if (!shouldQueueRequest(self, triggerData.queue)) return;
       const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (ctrl) self._bReqs.add(ctrl);
       self._bN = (self._bN || 0) + 1;
@@ -1441,25 +1537,12 @@
           timedOut = true;
           try {
             ctrl.abort();
-          } catch (e) {
+          } catch {
           }
         }, timeoutMs);
       }
       const actions = self._bActions;
-      const setBusy = (on) => {
-        const indSel = el.getAttribute("data-indicator");
-        const ind = indSel ? document.querySelector(indSel) : null;
-        if (ind && ind instanceof HTMLElement) ind.hidden = !on;
-        if (on) {
-          el.setAttribute("data-request", "");
-          el.setAttribute("data-pending", "");
-        } else {
-          el.removeAttribute("data-request");
-          el.removeAttribute("data-pending");
-        }
-        if (el.hasAttribute("data-disable")) el.toggleAttribute("disabled", on);
-      };
-      setBusy(true);
+      updateElementBusyState(el, true);
       const beforeEvt = new CustomEvent("laghu:before-request", {
         bubbles: true,
         cancelable: true,
@@ -1472,7 +1555,7 @@
         if (timer) clearTimeout(timer);
         if (ctrl) self._bReqs.delete(ctrl);
         self._bN = Math.max(0, self._bN - 1);
-        setBusy(false);
+        updateElementBusyState(el, false);
       }
       if (!el.dispatchEvent(beforeEvt)) {
         finish();
@@ -1494,18 +1577,7 @@
         return handleFetchResponse(el, res, scope, requestUrl, targetSel, swap, actions);
       }).catch((err) => {
         finish();
-        if (err && err.name === "AbortError" && !timedOut) return;
-        setPath(scope, "$error", {
-          message: String(err && err.message || err),
-          timeout: timedOut
-        });
-        el.dispatchEvent(
-          new CustomEvent("laghu:request-error", {
-            bubbles: true,
-            detail: { error: err, timeout: timedOut }
-          })
-        );
-        reportError(err);
+        handleFetchError(el, err, scope, timedOut);
       });
     }
     function setupFetch(el, scope, method, url, actions) {
@@ -1553,7 +1625,7 @@
     function tryJSON(s) {
       try {
         return JSON.parse(s);
-      } catch (e) {
+      } catch {
         return null;
       }
     }
@@ -1598,7 +1670,7 @@
         try {
           const escaped = typeof CSS !== "undefined" && CSS && CSS.escape ? CSS.escape(id) : String(id).replace(/([^a-zA-Z0-9_-])/g, "\\$1");
           sel = "#" + escaped;
-        } catch (e) {
+        } catch {
           sel = '[id="' + String(id).replace(/"/g, "") + '"]';
         }
         let fresh = target.querySelector(sel);
@@ -1614,17 +1686,17 @@
       if (focusedEl && focusedEl instanceof HTMLElement) {
         try {
           focusedEl.focus({ preventScroll: true });
-        } catch (e) {
+        } catch {
           try {
             focusedEl.focus();
-          } catch (e2) {
+          } catch {
           }
         }
         try {
           if (selStart >= 0 && focusedEl.setSelectionRange) {
             focusedEl.setSelectionRange(selStart, selEnd);
           }
-        } catch (e) {
+        } catch {
         }
       }
     }
@@ -1690,7 +1762,7 @@
           try {
             initial[key] = element[key];
             delete element[key];
-          } catch (e) {
+          } catch {
           }
         }
       }

@@ -4,7 +4,7 @@
  * Laghu.get(this, 'l.id'). One shared store, zero duplication.
  */
 Laghu.define("sudoku-pad", function () {
-  var store = Laghu.store("sudoku");
+  const store = Laghu.store("sudoku");
   return {
     state: store,
     actions: {

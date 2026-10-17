@@ -99,7 +99,7 @@ describe("router.html page", () => {
     const html = fs.readFileSync(path.join(root, "examples", "router.html"), "utf8");
     document.body.innerHTML = html.slice(html.indexOf("<nav>"), html.indexOf("<script src"));
 
-    const origRoute = LaghuRouter.route;
+    const origRoute = LaghuRouter.route.bind(LaghuRouter);
     let stopExample: any;
     LaghuRouter.route = (opts: any) => {
       stopExample = origRoute(opts);
@@ -250,8 +250,8 @@ describe("LaghuRouter declarative templates", () => {
 
   it("covers navigate, hash fallback, beforeEach abort, guard abort, notfound fn, and hook errors", async () => {
     (window as any).Laghu = {
-      eval: Laghu.eval,
-      swap: Laghu.swap,
+      eval: (...args: any[]) => (Laghu.eval as any)(...args),
+      swap: (...args: any[]) => (Laghu.swap as any)(...args),
     };
     document.body.innerHTML = `
       <div id="router-view">

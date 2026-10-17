@@ -2,9 +2,9 @@
  * Contract: cells are viewed as a plain array of 9 ('X', 'O', or null).
  * winnerOf returns null (playing), { b: 'X'|'O', line: [a,b,c] } (win),
  * or { b: 'D', line: [] } (draw). */
-var TttGame = (function () {
+const TttGame = (function () {
   "use strict";
-  var LINES = [
+  const LINES = [
     [0, 1, 2],
     [3, 4, 5],
     [6, 7, 8],
@@ -16,14 +16,14 @@ var TttGame = (function () {
   ];
 
   function winnerOf(cells) {
-    for (var k = 0; k < LINES.length; k++) {
-      var line = LINES[k];
-      var a = cells[line[0]];
+    for (let k = 0; k < LINES.length; k++) {
+      const line = LINES[k];
+      const a = cells[line[0]];
       if (a && a === cells[line[1]] && a === cells[line[2]]) {
         return { b: a, line: line };
       }
     }
-    for (var i = 0; i < 9; i++) {
+    for (let i = 0; i < 9; i++) {
       if (!cells[i]) return null;
     }
     return { b: "D", line: [] };
@@ -39,3 +39,7 @@ var TttGame = (function () {
 
   return { winnerOf: winnerOf, statusText: statusText, LINES: LINES };
 })();
+
+if (typeof window !== "undefined") {
+  window.TttGame = TttGame;
+}

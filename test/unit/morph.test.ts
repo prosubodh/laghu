@@ -23,7 +23,7 @@ describe("LaghuMorph", () => {
   });
 
   it("syncs unfocused inputs and checkboxes, preserves focused ones", () => {
-    const t = morphEd(
+    morphEd(
       `<input id="a" value="typed"><input id="c" type="checkbox">`,
       `<input id="a" value="server"><input id="c" type="checkbox" checked>`,
     );
@@ -34,7 +34,7 @@ describe("LaghuMorph", () => {
   });
 
   it("syncs textarea and select form controls", () => {
-    const t = morphEd(
+    morphEd(
       `<textarea id="txt">initial text</textarea><select id="sel"><option value="1">1</option><option value="2" selected>2</option></select>`,
       `<textarea id="txt">updated text</textarea><select id="sel"><option value="1" selected>1</option><option value="2">2</option></select>`,
     );

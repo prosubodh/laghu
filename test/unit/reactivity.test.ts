@@ -188,7 +188,7 @@ describe("store and persist", () => {
 
     Laghu.effect(() => {
       if (s.boom) throw new Error("flush explosion");
-      s.count;
+      void s.count;
     });
 
     s.boom = true;
