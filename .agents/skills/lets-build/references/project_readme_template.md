@@ -47,30 +47,25 @@
 ## ⚡ Quickstart & Development
 
 ### 1. Prerequisites
-
 - {{PREREQUISITES_LIST}}
 - Docker & Docker Compose
 
 ### 2. Environment Setup
-
 ```bash
 cp .env.example .env
 ```
 
 ### 3. Install Dependencies
-
 ```bash
 {{INSTALL_COMMAND}}
 ```
 
 ### 4. Run Development Environment
-
 ```bash
 {{DEV_RUN_COMMAND}}
 ```
 
 ### 5. Run Tests & Verification
-
 ```bash
 {{TEST_COMMAND}}
 ```
@@ -80,6 +75,5 @@ cp .env.example .env
 ## 🏛️ Architecture Governance & Decisions
 
 This project is governed by the **28 Cohesive Domain Rules** located in `docs/rules/` and Architectural Decision Records in `memory.md`:
-
 - **ADR Ledger:** See `memory.md` for project-specific Architectural Decision Records.
 - **Architectural Rules:** See `docs/rules/` for TDD, Clean Code, Multi-Tenancy, Database Design, and DevSecOps directives.

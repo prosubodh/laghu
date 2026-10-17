@@ -29,7 +29,6 @@ allow if {
 ```
 
 ### High-Performance In-Process Evaluation (OPA WebAssembly)
-
 - In addition to running OPA as a local daemon or sidecar over HTTP/gRPC, compile Rego policies to **`.wasm`** binaries.
 - Embedded OPA Wasm modules evaluate policies directly within application process memory across any language (Rust, Go, Python, Java, Node) with sub-millisecond latency and zero network roundtrips.
 

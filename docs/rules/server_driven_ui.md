@@ -35,12 +35,7 @@ The backend provides a declarative UI layout schema describing fields, layouts, 
       "title": "General Details",
       "components": [
         { "type": "TextInput", "id": "orderNumber", "label": "Order #", "readOnly": true },
-        {
-          "type": "TextInput",
-          "id": "custom_attributes.poNumber",
-          "label": "PO Number",
-          "required": true
-        }
+        { "type": "TextInput", "id": "custom_attributes.poNumber", "label": "PO Number", "required": true }
       ]
     },
     {
@@ -48,22 +43,12 @@ The backend provides a declarative UI layout schema describing fields, layouts, 
       "title": "Tax Exemption",
       "visibleIf": "order.custom_attributes.isTaxExempt == true",
       "components": [
-        {
-          "type": "TextInput",
-          "id": "custom_attributes.taxExemptionId",
-          "label": "Tax ID",
-          "required": true
-        }
+        { "type": "TextInput", "id": "custom_attributes.taxExemptionId", "label": "Tax ID", "required": true }
       ]
     }
   ],
   "_actions": [
-    {
-      "action": "SUBMIT_FOR_APPROVAL",
-      "label": "Submit Order",
-      "method": "POST",
-      "target": "/api/v1/orders/123/submit"
-    }
+    { "action": "SUBMIT_FOR_APPROVAL", "label": "Submit Order", "method": "POST", "target": "/api/v1/orders/123/submit" }
   ]
 }
 ```

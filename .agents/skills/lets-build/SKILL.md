@@ -33,7 +33,6 @@ Progress through five mandatory stages:
 ---
 
 ### Phase 1: Discover (Toolchain & Workspace Inspection)
-
 1. Inspect the workspace root: confirm whether this is a fresh copy or an existing codebase.
 2. Check for pre-installed development runtimes and CLI tools (`go`, `rustc`/`cargo`, `python3`/`uv`, `node`/`pnpm`, `docker`, `semgrep`).
 3. Verify that `AGENTS.md`, `memory.md`, and `docs/rules/` exist and remain intact.
@@ -41,11 +40,9 @@ Progress through five mandatory stages:
 ---
 
 ### Phase 2: Interrogate (The Problem-First Architecture Interview)
-
 Do NOT guess or assume any technology or stack choice. Execute the relentless interrogation using [references/architecture_interview_matrix.md](./references/architecture_interview_matrix.md). Group questions logically into digestible batches:
 
 #### Batch 1: Problem Space & System Topology
-
 1. **Domain & Problem Statement:** What real-world problem or capability does this system solve? What data moves, and what transformations occur?
 2. **System Topology Classification:** Which topology best matches the execution target?
    - Topology A: Web SaaS / Cloud Applications (Fullstack Web App vs Headless API)
@@ -56,14 +53,12 @@ Do NOT guess or assume any technology or stack choice. Execute the relentless in
    - Topology F: Embedded / Systems Library
 
 #### Batch 2: Operational & Physical Constraints (The Machine Reality)
-
 3. **Latency & Time Budget:** Hard real-time (<16.6ms / <7ms frame loop), interactive low-latency (<10ms keystroke), soft service API (<200ms p99), or batch?
 4. **Memory Management & GC Tolerance:** Zero-GC pause tolerance (demands C/C++/Rust/Zig), managed throughput GC (Go, Java 21+, C# .NET 9), or single-threaded event loop (JS/TS)?
 5. **Concurrency & Execution Model:** Single-threaded event loop, multi-threaded worker pools with work stealing, SIMD compute shaders, or distributed actors?
 6. **Persistence & Connectivity:** Zero persistence (in-memory only), local flat/binary files, embedded SQLite, client-side browser storage, or enterprise RDBMS (Postgres)? Zero network, WebSockets, UDP, or HTTP/REST/gRPC?
 
 #### Batch 3: Architectural Style & Emergent Toolchain
-
 7. **Architectural Style Derivation:**
    - Web SaaS ➔ Modular Monolith / Hexagonal (Ports & Adapters)
    - Browser Extension ➔ Platform Scripting (`background`, `content`, `popup`, `storage`)
@@ -74,22 +69,19 @@ Do NOT guess or assume any technology or stack choice. Execute the relentless in
 9. **Package Manager & Toolchain:** Specific package manager (`cargo`, `pnpm`, `uv`, `go modules`) and build task runner.
 
 #### Batch 4: Targeted Invariants (Topology-Scoped, 100% YAGNI)
-
-Inquire _only_ into the dimensions relevant to the selected topology:
-
-- _If Web SaaS / Cloud Application:_
+Inquire *only* into the dimensions relevant to the selected topology:
+- *If Web SaaS / Cloud Application:*
   - **Interface Scope:** Headless API service only vs Fullstack Web Application (API + Web Frontend).
   - **If Fullstack Web Application:** Frontend framework & build tool (React + Vite, Vue 3, Svelte 5), styling & accessible headless component primitives (Tailwind CSS, Radix UI / shadcn/ui per [`frontend_architecture.md`](../../../docs/rules/frontend_architecture.md)), client directory structure (`client/` + `src/` backend), and persistent app shell layout per [`ui_ux_architecture.md`](../../../docs/rules/ui_ux_architecture.md).
   - **Backend & Data:** API protocol (REST/OpenAPI 3.1 vs gRPC), DB migration engine (Atlas/Flyway), tenancy isolation model, authentication, and OCI distroless containers.
-- _If Browser Extension:_ MV3 content script isolation (IIFE bundle), `chrome.storage.sync` flow, permissions. (Zero Docker/K8s/OpenAPI!).
-- _If Frontend-only (Topology A variant):_ Framework & build tool (React + Vite, Vue 3, Svelte 5), styling & headless primitives (Tailwind + Radix/shadcn per [`frontend_architecture.md`](../../../docs/rules/frontend_architecture.md)), `src/components|pages|hooks|services` layout, app-shell triage per [`ui_ux_architecture.md`](../../../docs/rules/ui_ux_architecture.md). (Zero Docker/SQL migrations!).
-- _If Game Engine:_ Graphics backend (Vulkan/DirectX/wgpu), memory allocators (arena/frame), ECS archetype model. (Zero Docker/SQL!).
-- _If CLI:_ Arg parsing library, POSIX exit codes, streaming I/O, `--json` formatting. (Zero Docker/SQL!).
+- *If Browser Extension:* MV3 content script isolation (IIFE bundle), `chrome.storage.sync` flow, permissions. (Zero Docker/K8s/OpenAPI!).
+- *If Frontend-only (Topology A variant):* Framework & build tool (React + Vite, Vue 3, Svelte 5), styling & headless primitives (Tailwind + Radix/shadcn per [`frontend_architecture.md`](../../../docs/rules/frontend_architecture.md)), `src/components|pages|hooks|services` layout, app-shell triage per [`ui_ux_architecture.md`](../../../docs/rules/ui_ux_architecture.md). (Zero Docker/SQL migrations!).
+- *If Game Engine:* Graphics backend (Vulkan/DirectX/wgpu), memory allocators (arena/frame), ECS archetype model. (Zero Docker/SQL!).
+- *If CLI:* Arg parsing library, POSIX exit codes, streaming I/O, `--json` formatting. (Zero Docker/SQL!).
 
 ---
 
 ### Phase 3: Synthesize (Architecture Blueprint & User Sign-Off)
-
 1. Consolidate the user's answers into a formal **Consolidated Architectural Blueprint** (using Section 4 template).
 2. Author the project's foundational Architectural Decision Record in `memory.md`, strictly starting with **`ADR-001: Target Technology Stack & Scaffolding Baseline`**. For a freshly initialized or bootstrapped project, `memory.md` must be a clean slate (zero prior decisions). If `memory.md` contains any legacy template ADRs from `azcodr`, sanitize and reset them so the new project starts from `ADR-001`.
 3. **STOP AND ASK FOR EXPLICIT CONFIRMATION**: Present the blueprint and ADR to the user. Do NOT write scaffolding code until the user approves the blueprint.
@@ -97,19 +89,17 @@ Inquire _only_ into the dimensions relevant to the selected topology:
 ---
 
 ### Phase 4: Bootstrap (Deterministic Topology Scaffolding)
-
 Upon user confirmation:
-
 1. Run the topology-aware workspace initialization script:
    ```bash
    node .agents/skills/lets-build/scripts/bootstrap_workspace.mjs . <topology> <language>
    ```
 2. Generate base infrastructure strictly for the selected topology (zero speculative bloat) using layouts from [references/hexagonal_bootstrap_scaffolds.md](./references/hexagonal_bootstrap_scaffolds.md):
-   - _Fullstack Web SaaS:_ Backend in `src/`, Web Client in `client/` (`client/src/components/layout`, `client/src/components/ui`, `client/src/pages`, `client/src/hooks`, `client/src/services`), `specs/openapi/v1/openapi.yaml`, `specs/tokens/tokens.json`, `deploy/docker`, `deploy/compose`.
-   - _Headless Backend:_ `src/domain/`, `src/ports/`, `src/adapters/`, `specs/openapi/v1/openapi.yaml`, `specs/tokens/tokens.json`, `deploy/docker`, `deploy/compose`.
-   - _Extension:_ `manifest.json`, `src/background/index.ts`, `src/content/index.ts`, `src/popup/index.html`.
-   - _Game / Engine:_ `src/core/`, `src/ecs/`, asset manifest, frame loop entrypoint.
-   - _CLI:_ `src/cmd/`, `src/core/`, CLI entrypoint with exit code handling.
+   - *Fullstack Web SaaS:* Backend in `src/`, Web Client in `client/` (`client/src/components/layout`, `client/src/components/ui`, `client/src/pages`, `client/src/hooks`, `client/src/services`), `specs/openapi/v1/openapi.yaml`, `specs/tokens/tokens.json`, `deploy/docker`, `deploy/compose`.
+   - *Headless Backend:* `src/domain/`, `src/ports/`, `src/adapters/`, `specs/openapi/v1/openapi.yaml`, `specs/tokens/tokens.json`, `deploy/docker`, `deploy/compose`.
+   - *Extension:* `manifest.json`, `src/background/index.ts`, `src/content/index.ts`, `src/popup/index.html`.
+   - *Game / Engine:* `src/core/`, `src/ecs/`, asset manifest, frame loop entrypoint.
+   - *CLI:* `src/cmd/`, `src/core/`, CLI entrypoint with exit code handling.
 3. Generate build manifests (`Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`) for the recorded language, install the pinned linter from the emitted gate configuration (`eslint.config.js`, `ruff.toml`, `clippy.toml`, `.golangci.yml`, `checkstyle.xml`, `.editorconfig` CA block, `.clang-tidy` — written deterministically by `bootstrap_workspace.mjs`, never invented). Node profiles arrive with `package.json` lint already rewired to `eslint .`; other profiles need the lint entry wired by hand. Prove the gate in Phase 5, and keep the boundary smoke test (`scripts/smoke_test.mjs`).
 4. **Replace Starter README with Project-Specific README**:
    Generate a clean, project-specific `README.md` using [references/project_readme_template.md](./references/project_readme_template.md), completely replacing meta-template content with the project's actual name, mission, stack highlights, quickstart commands, and directory tree.
@@ -117,10 +107,9 @@ Upon user confirmation:
 ---
 
 ### Phase 5: Verify & Handover to Domain Analysis
-
 1. Run the workspace validation script:
    ```bash
-   node scripts/validate-cli.js
+   bash .agents/skills/agentic-architect/scripts/validate_agentic_configs.sh
    ```
 2. Execute toolchain dependency checks, build commands, and health/smoke tests:
    - Compile code and verify zero compiler or lint errors.
@@ -151,31 +140,26 @@ Upon user confirmation:
 ## 4. Structured Output Templates
 
 ### Consolidated Architectural Blueprint Template
-
 ```markdown
 # Architectural Specification & Technology Blueprint
 
 ## 1. Problem Space & Topology
-
 - **Project Domain:** <domain>
 - **System Topology:** <Web SaaS / Browser Extension / Game Engine / Canvas Game / CLI / Library>
 - **Architectural Style:** <Hexagonal / Platform Scripting / Data-Oriented Design / Game Loop / Command Pipeline>
 
 ## 2. Core Profile & Constraints
-
 - **Primary Language & Runtime:** <language / version>
 - **Package Manager & Build Tool:** <tool>
 - **Latency / Performance Target:** <Hard real-time / Interactive / Service / Batch>
 - **Memory & Concurrency Model:** <Zero GC / Managed GC / Single-threaded event loop>
 
 ## 3. Interfaces & Storage
-
 - **Protocols / Transports:** <REST / gRPC / WebSockets / CLI stdin-stdout / None>
 - **Storage / Persistence:** <PostgreSQL / SQLite / chrome.storage / Flat file / In-memory>
 - **Specifications:** <OpenAPI 3.1 / Manifest V3 / Protobuf / None>
 
 ## 4. Quality & Verification
-
 - **Testing Strategy:** Outside-In TDD with Nano-Cycles (Uncle Bob's 3 Laws)
 - **Code Health Gates:** 100% coverage on all metrics + mutation kill gate on guards, zero lint errors
 - **DevSecOps:** <Semgrep / Trivy / Gitleaks / None>
@@ -184,8 +168,7 @@ Upon user confirmation:
 ---
 
 ## 5. Subdirectories & Progressive Resources
-
 - [references/architecture_interview_matrix.md](./references/architecture_interview_matrix.md): Exhaustive 5-tier problem-first architecture interview questions and branch logic.
 - [references/hexagonal_bootstrap_scaffolds.md](./references/hexagonal_bootstrap_scaffolds.md): Standardized directory trees and foundational templates across Go, Rust, Python, and TypeScript.
 - [references/project_readme_template.md](./references/project_readme_template.md): Boilerplate template for replacing starter documentation with project-specific README.
-- [scripts/bootstrap_workspace.mjs](./scripts/bootstrap_workspace.mjs): Topology-aware deterministic workspace initialization script (cross-platform Node).
+- [scripts/bootstrap_workspace.mjs](./scripts/bootstrap_workspace.mjs): Topology-aware deterministic workspace initialization script.

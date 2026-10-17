@@ -32,10 +32,10 @@ The application interface is strictly divided into two distinct anatomical zones
 flowchart TD
     subgraph PersistentAppShell["Persistent Application Shell"]
         Header["Persistent Global Header<br/>[Brand / Logo] | [Org Switcher] | [Command Palette Cmd+K] | [Alerts] | [User Profile]"]
-
+        
         subgraph BodyLayout["Viewport Split"]
             Sidebar["Persistent Operator Sidebar<br/>(Collapsible to 64px Icon Rail)<br/>• Overview (Dashboard)<br/>• Operations (Catalogs, Resources)<br/>• Transactions (Orders, Invoices)<br/>• Financials (Ledger, Settlements)<br/>• Services (Requests, Tickets)<br/>• Settings (Team, Roles, Org)<br/>• Collapse / Expand Toggle"]
-
+            
             subgraph DynamicCanvas["Dynamic Viewport Canvas"]
                 Breadcrumb["1. Contextual Breadcrumbs<br/>Home > Resources > Details"]
                 PageHeader["2. Page Header & Primary Action CTA<br/>[Page Title] [Filter] [+ Primary Action CTA]"]
@@ -45,15 +45,14 @@ flowchart TD
             end
             Sidebar ~~~ DynamicCanvas
         end
-
+        
         Footer["Persistent Status / Footer (System Context, Active Role Indicator, Accessible Live Regions)"]
-
+        
         Header --> BodyLayout --> Footer
     end
 ```
 
 ### 2.1. The Persistent Shell (Never Re-rendered Across Page Navigations)
-
 - **Top Header**:
   - **Brand Anchor**: Visual identity and immediate home navigation.
   - **Organization Context Switcher**: Dropdown selector allowing operators to switch multi-tenant organization contexts (`organizationId`) with automatic data re-fetching.
@@ -69,7 +68,6 @@ flowchart TD
   - Floating toast container and ARIA live regions for mutation confirmations (`role="status"`) and errors (`role="alert"`).
 
 ### 2.2. The Dynamic Canvas (Contextual to Active Route & User Role)
-
 - **Primary Action Buttons (CTAs)**: Operator sees "+ Create Resource" or "Approve Transaction"; Member sees "Submit Request" or "Make Payment".
 - **Data Table Columns**: Operators see customer contact info, financial amounts, and audit fields (`createdBy`); Members see only their own personal records.
 - **Metric Widgets & Dashboards**: Operators see organization cash flow, throughput, and review queues; Members see personal account status and open request progress.
@@ -80,21 +78,20 @@ flowchart TD
 
 To prevent confusing operators with consumer simplicity and overwhelming consumers with enterprise complexity, applications enforce **Two Completely Distinct Experiences**:
 
-| Architectural Dimension | Enterprise Operator Workspace                           | Consumer / Member Portal (`/portal`)                            | Public Catalog / Landing (`/catalog`)             |
-| ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------- |
-| **Target Roles**        | `ADMIN`, `OPERATOR`, `MANAGER`, `AUDITOR`               | `MEMBER`, `CONSUMER`, `CUSTOMER`                                | Unauthenticated Visitors, Prospective Users       |
-| **Route Prefix**        | `/` (e.g. `/resources`, `/orders`, `/analytics`)        | `/portal` (e.g. `/portal`, `/portal/orders`, `/portal/support`) | `/catalog`, `/onboarding`                         |
-| **Navigation Pattern**  | Collapsible left sidebar with categorized sections      | Clean top navigation bar + mobile bottom navigation bar         | Simple landing header with "Sign In" CTA          |
-| **Information Density** | High density, tabular grids, advanced multi-filters     | Low-to-medium density, card-centric, touch ergonomics           | Visual cards, featured items, search badges       |
-| **Data Scope**          | Organization-wide (all entities, transactions, ledgers) | Member-scoped (strictly own entities, orders, requests)         | Public records with status `AVAILABLE` / `ACTIVE` |
-| **Primary Goal**        | Operational throughput, oversight, compliance, auditing | Self-service autonomy, rapid actions, account visibility        | Resource discovery and user onboarding            |
+| Architectural Dimension | Enterprise Operator Workspace | Consumer / Member Portal (`/portal`) | Public Catalog / Landing (`/catalog`) |
+|---|---|---|---|
+| **Target Roles** | `ADMIN`, `OPERATOR`, `MANAGER`, `AUDITOR` | `MEMBER`, `CONSUMER`, `CUSTOMER` | Unauthenticated Visitors, Prospective Users |
+| **Route Prefix** | `/` (e.g. `/resources`, `/orders`, `/analytics`) | `/portal` (e.g. `/portal`, `/portal/orders`, `/portal/support`) | `/catalog`, `/onboarding` |
+| **Navigation Pattern** | Collapsible left sidebar with categorized sections | Clean top navigation bar + mobile bottom navigation bar | Simple landing header with "Sign In" CTA |
+| **Information Density** | High density, tabular grids, advanced multi-filters | Low-to-medium density, card-centric, touch ergonomics | Visual cards, featured items, search badges |
+| **Data Scope** | Organization-wide (all entities, transactions, ledgers) | Member-scoped (strictly own entities, orders, requests) | Public records with status `AVAILABLE` / `ACTIVE` |
+| **Primary Goal** | Operational throughput, oversight, compliance, auditing | Self-service autonomy, rapid actions, account visibility | Resource discovery and user onboarding |
 
 ---
 
 ## 4. Production Authentication UX vs. Developer Persona Harness
 
 ### 4.1. Strict Decoupling Mandate
-
 - **NEVER** embed test personas ("Admin Alice", "Operator Bob", "Member Charlie") into production sign-in forms or modals. Conflating demo personas with actual authentication makes the application feel like a toy prototype and creates severe security/UX confusion.
 - **Production Sign-In (`/login`)**:
   - Clean, dedicated sign-in page or clean modal.
@@ -122,7 +119,7 @@ To prevent confusing operators with consumer simplicity and overwhelming consume
   - Hiding a button via `<Can permission="...">` is an ergonomic convenience, **never security**.
   - All routes must be protected by declarative route guards:
     ```tsx
-    <Route element={<ProtectedRoute requiredRoles={["ADMIN", "OPERATOR"]} />}>
+    <Route element={<ProtectedRoute requiredRoles={['ADMIN', 'OPERATOR']} />}>
       <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/transactions" element={<TransactionsPage />} />
     </Route>
@@ -139,7 +136,6 @@ To prevent confusing operators with consumer simplicity and overwhelming consume
 ## 6. Bidirectional URL State Synchronization
 
 Per [`docs/rules/frontend_architecture.md`](./frontend_architecture.md), all view state that represents navigation, active tab, filtering, sorting, pagination, or search query must synchronize bidirectionally with URL search parameters (`useSearchParams`):
-
 1. **Tabs**: `?tab=active`, `?tab=draft`, `?tab=archived`
 2. **Filters**: `?status=ACTIVE&category=cloud`
 3. **Search Queries**: `?q=alpha`

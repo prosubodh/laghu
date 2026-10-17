@@ -27,17 +27,25 @@ flowchart TD
     ProblemSpace -->|Shapes & Dictates| SolutionSpace
 ```
 
-- **The Problem Space (The Essence - Fred Brooks):** Concerns _what_ problem is being solved, the entities, state transitions, and operational constraints (e.g. 16.6ms frame budget for games, zero-install browser sandbox for extensions, or ACID compliance for banking). **Zero technology, stack, or database choices are permitted in the Problem Space.**
-- **The Solution Space (The Accidents):** Concerns _how_ the system is realized. Runtimes, programming languages (C, Rust, TS, Go, Java), and storage engines are **emergent outputs** derived strictly from Problem Space constraints.
+- **The Problem Space (The Essence - Fred Brooks):** Concerns *what* problem is being solved, the entities, state transitions, and operational constraints (e.g. 16.6ms frame budget for games, zero-install browser sandbox for extensions, or ACID compliance for banking). **Zero technology, stack, or database choices are permitted in the Problem Space.**
+- **The Solution Space (The Accidents):** Concerns *how* the system is realized. Runtimes, programming languages (C, Rust, TS, Go, Java), and storage engines are **emergent outputs** derived strictly from Problem Space constraints.
 - **The Golden Hammer Anti-Pattern:** Selecting tools (e.g., "Let's use Next.js and PostgreSQL") before mapping problem constraints forces the domain to fit the tool, creating massive accidental complexity.
 
 ### Strategic Subdomain & Capability Mapping
-
 Structure enterprise business capabilities into three distinct tiers:
-
 1. **Core Subdomain / Capabilities**: Proprietary value drivers and business differentiators (e.g. specialized workflow engines, dynamic pricing algorithms). Allocate 80% of architectural effort here.
 2. **Supporting Subdomain / Capabilities**: Business functions specific to the domain but not competitive differentiators (e.g. order tracking, invoice rendering).
 3. **Generic Subdomain / Capabilities**: Standard commoditized software (e.g. authentication, audit logging, email transport). Rely exclusively on standard open-source libraries.
+
+### Strategic Context Mapping Archetypes (Eric Evans)
+Formally define and document integration relationships between Bounded Contexts using Evans's canonical archetypes:
+- **Shared Kernel**: Two contexts share a small, tightly bounded subset of the domain model and code. Requires mutual agreement on changes.
+- **Customer / Supplier (Upstream / Downstream)**: The upstream context delivers data or services required by the downstream context, with upstream committing to prioritize downstream requirements.
+- **Conformist**: The downstream context accepts and conforms directly to the upstream model without negotiation or translation.
+- **Anti-Corruption Layer (ACL)**: A dedicated translation boundary where incoming foreign models are converted into the downstream context's native Ubiquitous Language before reaching domain entities.
+- **Open Host Service (OHS)**: An upstream subsystem exposing a stable, documented protocol/API enabling multiple distinct downstream consumers to integrate safely.
+- **Published Language (PL)**: A shared, well-documented serialization format (e.g. CloudEvents, Protocol Buffers, JSON Schema) used in conjunction with OHS.
+- **Separate Ways**: When the overhead of integration and coordination exceeds its business value, declare contexts completely disconnected with zero shared code.
 
 ---
 
@@ -46,11 +54,10 @@ Structure enterprise business capabilities into three distinct tiers:
 The fundamental premise of Domain-Driven Design (Eric Evans) is that **the code is the model, and the model is the code**. Any divergence between the mental model of domain experts and the source code is called **Linguistic Drift**.
 
 ### Principles of Linguistic Alignment
-
 1. **Zero Synonyms (The Single Name Rule)**: Every domain concept has exactly one authoritative term. Synonyms (e.g. `Client` vs `User`, `Account` vs `Organization`, `Contract` vs `Agreement`) are strictly forbidden across code, tests, and user interfaces.
 2. **Eliminate Technical Jargon from Domain Core**: Domain models must not leak technical implementation terms (e.g. `UserRecord`, `TenantRow`, `DataDTO`, `IsActiveFlag`). The domain language must be pure business vocabulary.
 3. **Contextual Isolation**: When a single English word has multiple meanings across business units, split the terms or isolate them within dedicated Bounded Contexts:
-   - _Example_: In multi-tenant infrastructure, a system isolation boundary is an **Organization** / **Tenant Workspace**. In application operations, a participant is a **Member**, **User**, or **Customer**. Using "Tenant" for both creates semantic ambiguity and catastrophic bugs.
+   - *Example*: In multi-tenant infrastructure, a system isolation boundary is an **Organization** / **Tenant Workspace**. In application operations, a participant is a **Member**, **User**, or **Customer**. Using "Tenant" for both creates semantic ambiguity and catastrophic bugs.
 
 ---
 
@@ -59,9 +66,7 @@ The fundamental premise of Domain-Driven Design (Eric Evans) is that **the code 
 Every project must maintain an authoritative, version-controlled **Living Ubiquitous Language Glossary** at [`docs/knowledge/ubiquitous_language.md`](../knowledge/ubiquitous_language.md).
 
 ### Structure of a Glossary Entry
-
 Each entry must define:
-
 - **Canonical Term**: The agreed domain name.
 - **Definition**: The business meaning agreed with stakeholders.
 - **Bounded Context**: The domain subsystem where this definition holds authority.
@@ -75,9 +80,7 @@ Each entry must define:
 To prevent linguistic drift over time, teams must employ mechanical enforcement:
 
 ### 1. Static Analysis / Linter Rules
-
 Configure custom linter rules (e.g. ESLint `id-denylist` or custom AST rules) to forbid banned synonyms in identifiers:
-
 ```json
 {
   "rules": {
@@ -87,9 +90,7 @@ Configure custom linter rules (e.g. ESLint `id-denylist` or custom AST rules) to
 ```
 
 ### 2. Branded Nominal Types
-
 Prevent "Primitive Obsession" where generic strings or IDs are conflated across domain boundaries:
-
 ```typescript
 export type UserId = string & { readonly __brand: unique symbol };
 export type OrganizationId = string & { readonly __brand: unique symbol };
@@ -100,7 +101,6 @@ function assignUserToOrder(orderId: OrderId, userId: UserId): void { ... }
 ```
 
 ### 3. Living Executable Specifications (Gherkin BDD)
-
 Acceptance criteria must be written strictly in Ubiquitous Language, serving as executable contracts that verify domain terminology in automated test runners.
 
 ---
@@ -118,15 +118,18 @@ Acceptance criteria must be written strictly in Ubiquitous Language, serving as 
 
        submit(): Result<void, DomainError> {
          if (this.order.items.length === 0) {
-           return err(new DomainError("Cannot submit empty order"));
+           return err(new DomainError('Cannot submit empty order'));
          }
-         if (this.order.status !== "DRAFT") {
-           return err(new DomainError("Order already submitted"));
+         if (this.order.status !== 'DRAFT') {
+           return err(new DomainError('Order already submitted'));
          }
-         this.order.status = "SUBMITTED";
+         this.order.status = 'SUBMITTED';
          return ok(undefined);
        }
      }
      ```
 4. **Anti-Corruption Layer (ACL)**: When integrating with third-party APIs or legacy systems that use different terminology, translate external payloads into the internal Ubiquitous Language at the boundary adapter before they enter the domain core.
 5. **Cross-Aggregate Coordination in Use Cases**: While an Aggregate Root guards its own internal invariants, business operations frequently span multiple aggregates (e.g. reserving an inventory item for an agreement). Application use cases or orchestrators must coordinate aggregate transitions atomically: asserting resource availability prior to state change, transitioning the constrained entity (e.g. `ALLOCATED`), and restoring state (`AVAILABLE`) upon cancellation, avoiding double-allocation race conditions without coupling aggregates directly.
+6. **Reference Other Aggregates by Identity Only** (Vaughn Vernon & Eric Evans): Aggregates must reference external Aggregates strictly by unique identifier (`OrderId`, `CustomerId`), never by holding direct object references (`customer.orders`). This prevents massive in-memory graph traversals and eliminates concurrent lock contention across aggregate boundaries.
+7. **One Aggregate Root Mutation per Transaction**: A single database transaction must mutate exactly one Aggregate Root. Cross-aggregate side effects and state transitions must be propagated asynchronously via Domain Events and eventual consistency (or the Transactional Outbox Pattern).
+8. **Domain Core Independence (Clean Architecture Dependency Rule)**: The domain model (Entities, Value Objects, Domain Services) must remain 100% agnostic of infrastructure. Zero imports of database drivers, ORMs, HTTP frameworks, or serialization decorators in domain entities.

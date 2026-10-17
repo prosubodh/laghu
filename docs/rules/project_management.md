@@ -20,7 +20,7 @@
 While user stories represent customer-facing value (governed by the INVEST model), engineering execution requires decomposing each story into technical developer tasks. Apply Bill Wake's **SMART** criteria to all developer tasks:
 
 - **S - Specific:** The task scope is clearly defined so every team member understands what is involved. Avoids overlapping with concurrent work and ensures all tasks aggregate into the complete story.
-- **M - Measurable:** Defined by the question: _"Can we objectively mark it as done?"_ Completion requires that:
+- **M - Measurable:** Defined by the question: *"Can we objectively mark it as done?"* Completion requires that:
   1. The code fulfills its intended behavior.
   2. Automated tests are written and passing.
   3. Clean code principles and refactoring have been applied.
@@ -33,7 +33,6 @@ While user stories represent customer-facing value (governed by the INVEST model
 ## 3. Definition of Done (DoD)
 
 A user story or task is only marked `DONE` when all of the following verifiable criteria are met:
-
 - [ ] **Lifecycle Provenance**: Code developed strictly via the 5-Phase Agile Domain Lifecycle (Requirements ➔ Domain Analysis ➔ Outer Acceptance RED ➔ Inner Unit RED-GREEN-REFACTOR ➔ Outer GREEN). Zero production code written before tests.
 - [ ] **Tests Green**: 100.00% full-stack test coverage maintained across statement, branch, function, and line metrics (`npm test` / `pnpm test`).
 - [ ] **Boundary Verified**: Cross-package boundary smoke tests passed against live running servers (`scripts/smoke_test.mjs`).

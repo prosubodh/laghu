@@ -4,7 +4,7 @@ Use this template when bootstrapping or restructuring an `AGENTS.md` file accord
 
 ---
 
-````markdown
+```markdown
 # AGENTS.md
 
 > **[Workspace / Package Name] Directives**  
@@ -13,7 +13,6 @@ Use this template when bootstrapping or restructuring an `AGENTS.md` file accord
 ---
 
 ## 1. Project Overview & Environment
-
 - **Purpose:** [1–2 sentences explaining what this project does and its core domain].
 - **Runtime & Tools:** [e.g. Node 24 / npm 11, package manager, key global scripts].
 - **High-Level Layout:**
@@ -24,7 +23,6 @@ Use this template when bootstrapping or restructuring an `AGENTS.md` file accord
 ---
 
 ## 2. Core Operating Framework
-
 - **Ground Truth Only:** A statement is only true if proven by a file, command output, or direct user instruction.
 - **Relentless Questioning Loop:** Before acting, answer:
   1. What is current state?
@@ -44,18 +42,16 @@ Use this template when bootstrapping or restructuring an `AGENTS.md` file accord
 
 Read these specialized rule files on demand when performing relevant tasks:
 
-| Domain            | Rule Reference File                                                                            | When to Consult                                          |
-| ----------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Testing**       | [docs/rules/test_driven_development.md](../../../../docs/rules/test_driven_development.md)     | Writing acceptance/unit tests, coverage checks.          |
-| **Multi-Tenancy** | [docs/rules/multitenancy_architecture.md](../../../../docs/rules/multitenancy_architecture.md) | Tenant context resolution, PostgreSQL RLS.               |
-| **Database**      | [docs/rules/database_design.md](../../../../docs/rules/database_design.md)                     | Relational integrity, ACID transactions, outbox pattern. |
+| Domain | Rule Reference File | When to Consult |
+|---|---|---|
+| **Testing** | [docs/rules/test_driven_development.md](../../../../docs/rules/test_driven_development.md) | Writing acceptance/unit tests, coverage checks. |
+| **Multi-Tenancy** | [docs/rules/multitenancy_architecture.md](../../../../docs/rules/multitenancy_architecture.md) | Tenant context resolution, PostgreSQL RLS. |
+| **Database** | [docs/rules/database_design.md](../../../../docs/rules/database_design.md) | Relational integrity, ACID transactions, outbox pattern. |
 
 ---
 
 ## 4. Harness Parity
-
 Keep `AGENTS.md`, `CLAUDE.md`, `agents.md`, `GEMINI.md`, `.cursorrules`, and `.windsurfrules` in sync via filesystem symlinks:
-
 ```bash
 ln -sf AGENTS.md CLAUDE.md
 ln -sf AGENTS.md agents.md
@@ -63,8 +59,4 @@ ln -sf AGENTS.md GEMINI.md
 ln -sf AGENTS.md .cursorrules
 ln -sf AGENTS.md .windsurfrules
 ```
-````
-
-```
-
 ```

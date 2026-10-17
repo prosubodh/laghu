@@ -23,21 +23,20 @@ flowchart TD
 
 ## 2. The Fallacy of Universal Configurability
 
-A common architectural anti-pattern is the **"Universal Workflow Fallacy"** (a variant of the _Inner Platform Effect_), which presumes that _every_ status and state transition in a system should be dynamically configurable by end-users or tenants.
+A common architectural anti-pattern is the **"Universal Workflow Fallacy"** (a variant of the *Inner Platform Effect*), which presumes that *every* status and state transition in a system should be dynamically configurable by end-users or tenants.
 
 ### The Architectural Invariant
-
 1. **Core Invariant States (Hard FSM / In-Aggregate)**:
    - Fundamental lifecycle states governed by business integrity, accounting invariants, or legal rules.
    - Enforced **strictly within the Aggregate Root** in compiled code.
    - Cannot be bypassed or arbitrarily restructured by tenant configuration.
-   - _Examples_:
+   - *Examples*:
      - A `Payment` or `Transaction` with status `SETTLED` cannot transition back to `PENDING` without a compensating `REFUND` or reversal ledger entry.
      - An `Order` cannot become `FULFILLED` without valid payment authorization and inventory deduction.
 2. **Operational / Business Process Stages (Soft FSM / Configurable Orchestration)**:
    - Tenant-specific pipeline stages, review checklists, approval tiers, and sub-statuses.
    - Managed via **Declarative State Transition Matrices**, **Workflow Engines** (Temporal / Camunda BPMN), or **CEL (Common Expression Language)** transition guards.
-   - _Examples_:
+   - *Examples*:
      - An application/lead review pipeline: Tenant A uses `[NEW -> REVIEW -> ACCEPTED]`; Tenant B uses `[NEW -> VETTING -> INTERVIEW -> APPROVAL -> ACCEPTED]`.
      - A support/ticket resolution lifecycle.
 
@@ -46,7 +45,6 @@ A common architectural anti-pattern is the **"Universal Workflow Fallacy"** (a v
 ## 3. State Machine Architectural Patterns
 
 ### Pattern A: In-Aggregate State Machine (Hard Invariants)
-
 Model states as **Discriminated Unions** or the GoF **State Pattern** encapsulated inside the domain entity. Public mutations must be explicit domain actions:
 
 ```typescript
@@ -55,10 +53,10 @@ export class OrderAggregate {
   private constructor(private state: OrderState) {}
 
   fulfill(actorId: string): Result<void, DomainError> {
-    if (this.state.status !== "PAID") {
+    if (this.state.status !== 'PAID') {
       return err(new DomainError(`Cannot fulfill order in status: ${this.state.status}`));
     }
-    this.state.status = "FULFILLED";
+    this.state.status = 'FULFILLED';
     this.state.updatedAt = new Date();
     this.state.updatedBy = actorId;
     return ok(undefined);
@@ -67,7 +65,6 @@ export class OrderAggregate {
 ```
 
 ### Pattern B: Declarative State Transition Matrix (Configurable FSM)
-
 For tenant-configurable operational stages, store transitions as declarative metadata:
 
 ```json
@@ -95,9 +92,7 @@ For tenant-configurable operational stages, store transitions as declarative met
 ```
 
 ### Pattern C: Durable Distributed Orchestration (Temporal / BPMN)
-
 When a state transition requires coordination across multiple aggregates or asynchronous third parties (e.g. external payment gateway, background verification API, webhook delivery):
-
 - Use a **Durable Workflow Engine** (Temporal or Camunda BPMN 2.0).
 - The workflow coordinates activities by sending commands to Aggregate Roots and awaiting Domain Events.
 - **Invariant**: The workflow engine never mutates aggregate state directly; it issues domain commands.
@@ -108,15 +103,15 @@ When a state transition requires coordination across multiple aggregates or asyn
 
 Every state change across any entity or workflow MUST be immutably recorded in a transition log:
 
-| Field          | Type            | Description                                             |
-| -------------- | --------------- | ------------------------------------------------------- |
-| `transitionId` | String (UUIDv7) | Unique identifier of the transition record.             |
-| `entityType`   | String          | Name of the entity (`Order`, `Application`, `Invoice`). |
-| `entityId`     | String          | Target entity identifier.                               |
-| `fromState`    | String          | Pre-transition state value.                             |
-| `toState`      | String          | Post-transition state value.                            |
-| `event`        | String          | Domain event or action triggering transition.           |
-| `actorId`      | String          | User ID or `SYSTEM` triggering the change.              |
-| `reason`       | String?         | Optional justification or audit comment.                |
-| `metadata`     | JSON?           | Snapshot of transition context or rule evaluation.      |
-| `createdAt`    | DateTime        | Immutable timestamp of transition.                      |
+| Field | Type | Description |
+|---|---|---|
+| `transitionId` | String (UUIDv7) | Unique identifier of the transition record. |
+| `entityType` | String | Name of the entity (`Order`, `Application`, `Invoice`). |
+| `entityId` | String | Target entity identifier. |
+| `fromState` | String | Pre-transition state value. |
+| `toState` | String | Post-transition state value. |
+| `event` | String | Domain event or action triggering transition. |
+| `actorId` | String | User ID or `SYSTEM` triggering the change. |
+| `reason` | String? | Optional justification or audit comment. |
+| `metadata` | JSON? | Snapshot of transition context or rule evaluation. |
+| `createdAt` | DateTime | Immutable timestamp of transition. |

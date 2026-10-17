@@ -1,6 +1,6 @@
 # Enterprise Authentication, Token Rotation & WebAuthn
 
-> **Core Mandate:** Enforce in-memory short-lived access tokens, cryptographic Refresh Token Rotation (RTR) with family revocation on replay detection, FIDO2/WebAuthn passkeys, and OIDC federation.
+> **Core Mandate:** Enforce in-memory short-lived access tokens, cryptographic Refresh Token Rotation (RTR) with family revocation on replay detection, session fixation defense, FIDO2/WebAuthn passkeys, and OIDC federation.
 
 ---
 
@@ -73,3 +73,20 @@
     2. Authenticate the selected demo persona and update auth context.
     3. Trigger role-appropriate navigation (e.g. switching to Member navigates to `/portal`; switching to Operator navigates to `/`).
 - **Zero Production Leaks**: In production builds (`import.meta.env.PROD`), the developer persona switcher must be tree-shaken and completely stripped from the bundle.
+
+---
+
+## 6. Session Fixation Defense & Recovery Token Lifecycles
+
+- **Session Fixation Defense**:
+  - Immediately upon successful authentication, credential re-verification, or privilege escalation (e.g. standard member elevated to organization admin), invoke session regeneration (`req.session.regenerate()`).
+  - Terminate and replace the existing session identifier to prevent session fixation exploits.
+  - Bind session cookies to `HttpOnly`, `Secure`, `SameSite=Lax` (or `SameSite=Strict`), and use the `__Host-` cookie prefix where supported.
+- **Password Reset & Magic Link Token Invariants**:
+  - **10-Minute TTL**: Recovery and passwordless magic link tokens must expire exactly 10 minutes after generation.
+  - **Single-Use Invalidation**: Tokens must be consumed atomically upon first presentation (e.g. `UPDATE auth_tokens SET consumed_at = NOW() WHERE consumed_at IS NULL ... RETURNING ...`) and invalidated permanently.
+  - **Salted Hash Persistence**: Store only salted cryptographic hashes (e.g. SHA-256 / Argon2id) in persistence layers; never store plaintext tokens in databases.
+  - **Strict Rate Limiting**: Limit email dispatch to a maximum of **3 requests per hour** per user identifier or IP address to prevent email bombing.
+  - **Redirect Allowlisting**: Validate redirect destination parameters strictly against an application host allowlist.
+
+

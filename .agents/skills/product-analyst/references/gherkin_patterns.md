@@ -5,7 +5,6 @@ Reusable Gherkin acceptance criteria patterns for full-stack and API features.
 ---
 
 ## 1. REST API CRUD Pattern
-
 ```gherkin
 Scenario: Successfully creating a tenant resource
   Given an authenticated user with role "ADMIN" in tenant "tenant-123"
@@ -24,7 +23,6 @@ Scenario: Successfully creating a tenant resource
 ---
 
 ## 2. Multi-Tenant Isolation Pattern
-
 ```gherkin
 Scenario: Tenant data isolation violation attempt
   Given an authenticated user in tenant "tenant-A"
@@ -37,7 +35,6 @@ Scenario: Tenant data isolation violation attempt
 ---
 
 ## 3. UI Interaction & Validation Pattern
-
 ```gherkin
 Scenario: Submitting an invalid email address
   Given the user is on the login page

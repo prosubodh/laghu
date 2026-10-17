@@ -26,8 +26,8 @@ flowchart TD
 When the tipping point is reached, utilize open-source `@openfeature/server-sdk` with open-source providers (Flipt or Unleash):
 
 ```typescript
-import { OpenFeature, Client } from "@openfeature/server-sdk";
-import { FliptProvider } from "@openfeature/flipt-provider";
+import { OpenFeature, Client } from '@openfeature/server-sdk';
+import { FliptProvider } from '@openfeature/flipt-provider';
 
 OpenFeature.setProvider(new FliptProvider({ url: process.env.FLIPT_URL }));
 export const featureClient: Client = OpenFeature.getClient();
@@ -40,11 +40,15 @@ export const featureClient: Client = OpenFeature.getClient();
 Pass tenant identity and contextual attributes during evaluation:
 
 ```typescript
-const isEnabled = await featureClient.getBooleanValue("advanced-analytics", false, {
-  targetingKey: user.id,
-  tenantId: user.tenantId,
-  tier: tenant.subscriptionTier,
-});
+const isEnabled = await featureClient.getBooleanValue(
+  'advanced-analytics',
+  false,
+  {
+    targetingKey: user.id,
+    tenantId: user.tenantId,
+    tier: tenant.subscriptionTier
+  }
+);
 ```
 
 ---

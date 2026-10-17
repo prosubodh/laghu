@@ -16,7 +16,6 @@ CI pipelines must execute fast, deterministic, shift-left quality gates on every
 ```
 
 ### Invariants:
-
 1. **Trunk-Based Development**: Feature branches must be short-lived ($\le 24$ hours) and merged into `main` continuously. Avoid long-lived feature branches that cause painful merge conflicts.
 2. **Shift-Left Automated PR Gates**: Every PR must pass automated CI checks before merge:
    - Zero linter or syntax errors (`npm run lint` / `cargo clippy`).
@@ -50,7 +49,6 @@ ENTRYPOINT ["node", "dist/index.js"]
 ```
 
 ### Invariants:
-
 1. **Multi-Stage Builds**: Build tools, package managers, and compilers must never leak into final runtime images.
 2. **Minimal Distroless / Scratch Base**: Use Google Distroless or `scratch` images. Never ship package managers (`apt`, `apk`), shells (`bash`, `sh`), or debugging utilities in production images.
 3. **Non-Root Execution**: Containers must never run as UID 0 (`root`). Always specify an unprivileged user (`USER nonroot:nonroot` or `USER 10001:10001`).

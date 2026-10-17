@@ -10,7 +10,6 @@ description: Use when conducting a security, compliance, or vulnerability audit 
 ---
 
 ## 1. When to Use This Skill
-
 - Preparing for or validating SOC 2 Type II readiness (access controls, tamper-evident audit logging, encryption).
 - Verifying ISO/IEC 27001 Annex A technical security controls.
 - Running comprehensive static analysis and vulnerability scans before a production release.
@@ -26,32 +25,24 @@ description: Use when conducting a security, compliance, or vulnerability audit 
 ```
 
 ### Step 1: Secret & Credential Scan (Open-Source)
-
 Run open-source secret scanners to verify zero committed keys, tokens, or credentials:
-
 ```bash
 # Using open-source Gitleaks
 gitleaks detect --source . -v
 # Using open-source Secretlint
 npx secretlint "**/*"
 ```
-
-_Pass Criteria:_ 0 detected secrets or private keys in git history and working tree.
+*Pass Criteria:* 0 detected secrets or private keys in git history and working tree.
 
 ### Step 2: Static Application Security Testing (SAST)
-
 Run open-source `semgrep` with security rulesets to detect injection flaws, insecure deserialization, and dangerous sinks:
-
 ```bash
 semgrep --config p/security-audit --config p/owasp-top-ten .
 ```
-
-_Pass Criteria:_ 0 High or Critical vulnerabilities.
+*Pass Criteria:* 0 High or Critical vulnerabilities.
 
 ### Step 3: Dependency & Container Vulnerability Scan
-
 Run open-source `trivy` and `grype` to audit lockfiles and containers for known CVEs:
-
 ```bash
 # Filesystem CVE scan via Trivy
 trivy fs --severity HIGH,CRITICAL --scanners vuln,misconfig .
@@ -60,13 +51,10 @@ syft dir:. -o cyclonedx-json=bom.json
 # Scan SBOM via Grype
 grype sbom:bom.json
 ```
-
-_Pass Criteria:_ 0 unpatched Critical or High CVEs in production dependencies.
+*Pass Criteria:* 0 unpatched Critical or High CVEs in production dependencies.
 
 ### Step 4: SOC 2 & ISO 27001 Control Verification
-
 Audit architectural implementation against compliance baselines:
-
 - **Audit Logging (CC7.2 / A.12)**: Are all state mutations logged with `{ timestamp, actorId, tenantId, action, entityType, entityId, ipAddress, userAgent, changes: { before, after } }`? Are audit logs write-only and tamper-evident?
 - **Access Control & RBAC (CC6.1 / A.9)**: Are built-in roles protected against mutation (`403 Forbidden`)? Is tenant isolation enforced on every query (`tenantId` predicate)?
 - **Cryptography (CC6.6 / A.10)**: Is TLS 1.3 enforced? Are passwords hashed using Argon2id or bcrypt? Is AES-256-GCM used for sensitive data at rest?
@@ -96,7 +84,6 @@ Audit architectural implementation against compliance baselines:
 ---
 
 ## 1. Executive Summary
-
 - **Overall Status:** [PASS / CONDITIONAL PASS / FAIL]
 - **Critical Issues:** [Count]
 - **High Issues:** [Count]
@@ -104,34 +91,30 @@ Audit architectural implementation against compliance baselines:
 ---
 
 ## 2. Open-Source Tool Execution Evidence
-
-| Tool       | Target       | Status | Findings              |
-| ---------- | ------------ | ------ | --------------------- |
-| `gitleaks` | Git Tree     | PASS   | 0 secrets found       |
-| `semgrep`  | Source Code  | PASS   | 0 critical SAST flaws |
-| `trivy`    | Dependencies | PASS   | 0 high/critical CVEs  |
+| Tool | Target | Status | Findings |
+|---|---|---|---|
+| `gitleaks` | Git Tree | PASS | 0 secrets found |
+| `semgrep` | Source Code | PASS | 0 critical SAST flaws |
+| `trivy` | Dependencies | PASS | 0 high/critical CVEs |
 
 ---
 
 ## 3. Compliance Control Evaluation Matrix
-
-| Framework     | Control ID | Control Description                       | Status | Evidence / Notes                  |
-| ------------- | ---------- | ----------------------------------------- | ------ | --------------------------------- |
-| **SOC 2**     | CC6.1      | Least-privilege RBAC & tenant isolation   | PASS   | Scoped database queries / RLS     |
-| **SOC 2**     | CC7.2      | Tamper-evident mutation audit logging     | PASS   | Audit table with actor tracing    |
-| **ISO 27001** | A.10.1     | Cryptographic controls (AES-256, TLS 1.3) | PASS   | TLS 1.3 configured, Argon2id auth |
-| **OWASP**     | A01        | Broken Access Control checks              | PASS   | Server-side guards on all routes  |
+| Framework | Control ID | Control Description | Status | Evidence / Notes |
+|---|---|---|---|---|
+| **SOC 2** | CC6.1 | Least-privilege RBAC & tenant isolation | PASS | Scoped database queries / RLS |
+| **SOC 2** | CC7.2 | Tamper-evident mutation audit logging | PASS | Audit table with actor tracing |
+| **ISO 27001** | A.10.1 | Cryptographic controls (AES-256, TLS 1.3) | PASS | TLS 1.3 configured, Argon2id auth |
+| **OWASP** | A01 | Broken Access Control checks | PASS | Server-side guards on all routes |
 
 ---
 
 ## 4. Required Remediation Actions
-
 1. [Action item #1 with assigned file and timeline]
 ```
 
 ---
 
 ## 5. Subdirectories & Progressive Resources
-
 - [references/soc2_iso_controls.md](./references/soc2_iso_controls.md): Detailed mapping of SOC 2 Trust Services Criteria and ISO 27001 Annex A controls.
 - [references/owasp_top10_controls.md](./references/owasp_top10_controls.md): OWASP Top 10 verification checklist and remediation patterns.

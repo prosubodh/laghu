@@ -113,7 +113,9 @@ const RESOLVED_ROOT = resolveAbsolute(WORKSPACE_ROOT);
 // exactly: an explicit HOME wins (harnesses and tests pin it), then the platform
 // default. os.homedir() alone ignores HOME on Windows -- proven on win32 -- which
 // would silently defeat the home and home-parent checks of the guard below.
-const RESOLVED_HOME = resolveAbsolute(process.env.HOME || os.homedir() || "/nonexistent-home");
+const RESOLVED_HOME = resolveAbsolute(
+  process.env.HOME || os.homedir() || "/nonexistent-home",
+);
 const REASON = protectedReason(RESOLVED_ROOT, RESOLVED_HOME);
 
 if (REASON && process.env.AZCODR_ALLOW_PROTECTED !== "1") {
