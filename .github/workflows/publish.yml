@@ -191,5 +191,11 @@ jobs:
 
       # Trusted publishing over OIDC: no JSR token is stored in the repo.
       # jsr.json carries the name, version, and export map.
+      #
+      # The very first publish must be done interactively, from a machine
+      # you are logged into (`npx jsr publish`), so the package exists and
+      # can be linked to this repository in its JSR settings. After that
+      # this job publishes automatically on every release.
       - name: Publish to JSR
+        if: inputs.dry-run != true
         run: npx jsr publish
