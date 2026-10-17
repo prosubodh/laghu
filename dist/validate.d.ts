@@ -35,9 +35,4 @@ export interface LaghuValidateAPI {
     }>;
     scan(root: Element | Document): void;
 }
-declare global {
-    interface Window {
-        LaghuValidate?: LaghuValidateAPI;
-    }
-}
 export declare const LaghuValidate: LaghuValidateAPI;

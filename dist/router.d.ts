@@ -84,9 +84,4 @@ export interface LaghuRouterAPI {
         params: Record<string, string>;
     }) => void): void;
 }
-declare global {
-    interface Window {
-        LaghuRouter?: LaghuRouterAPI;
-    }
-}
 export declare const LaghuRouter: LaghuRouterAPI;

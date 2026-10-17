@@ -28,7 +28,7 @@
   ],
   "type": "module",
   "main": "dist/laghu.min.js",
-  "types": "dist/laghu.d.ts",
+  "types": "dist/globals.d.ts",
   "unpkg": "dist/laghu.min.js",
   "jsdelivr": "dist/laghu.min.js",
   "scripts": {

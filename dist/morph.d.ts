@@ -31,9 +31,4 @@ export interface LaghuMorphAPI {
     morphEl(a: Element, b: Element): void;
     version: string;
 }
-declare global {
-    interface Window {
-        LaghuMorph?: LaghuMorphAPI;
-    }
-}
 export declare const LaghuMorph: LaghuMorphAPI;

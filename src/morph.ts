@@ -31,12 +31,6 @@ export interface LaghuMorphAPI {
   version: string;
 }
 
-declare global {
-  interface Window {
-    LaghuMorph?: LaghuMorphAPI;
-  }
-}
-
 export const LaghuMorph: LaghuMorphAPI = (() => {
   "use strict";
   /**

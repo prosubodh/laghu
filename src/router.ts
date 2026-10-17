@@ -75,12 +75,6 @@ export interface LaghuRouterAPI {
   ): void;
 }
 
-declare global {
-  interface Window {
-    LaghuRouter?: LaghuRouterAPI;
-  }
-}
-
 export const LaghuRouter: LaghuRouterAPI = (() => {
   "use strict";
   var current: any = { path: "", params: {} };

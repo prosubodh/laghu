@@ -87,38 +87,6 @@ export interface LaghuAPI {
   scope(parent: any, vars: Record<string, any>): any;
 }
 
-declare global {
-  interface Window {
-    Laghu: LaghuAPI;
-    __LAGHU_DEV__?: boolean;
-  }
-  // Internal bookkeeping fields laghu attaches to DOM nodes.
-  // Optional and underscore-prefixed; plugin authors may read
-  // _bScope but must never write these directly.
-  interface Element {
-    _bcu?: Array<Function>;
-    _bH?: Record<string, number>;
-    _bReq?: any;
-    _bReqs?: Set<any>;
-    _bN?: number;
-    _bScope?: any;
-    _bActions?: Record<string, Function>;
-    _bInit?: boolean;
-    _bPend?: Record<string, string | null> | null;
-    _bOnUnmount?: Function;
-  }
-  interface HTMLElement {
-    _bcu?: Array<Function>;
-    _bH?: Record<string, number>;
-    _bT?: number;
-    _bHide?: boolean;
-    _bVal?: boolean;
-    _bValForm?: boolean;
-    _bTried?: boolean;
-    _bTouched?: boolean;
-  }
-}
-
 export const Laghu: LaghuAPI = (() => {
   "use strict";
   var VERSION = "1.2.1";

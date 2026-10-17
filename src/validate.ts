@@ -34,12 +34,6 @@ export interface LaghuValidateAPI {
   scan(root: Element | Document): void;
 }
 
-declare global {
-  interface Window {
-    LaghuValidate?: LaghuValidateAPI;
-  }
-}
-
 export const LaghuValidate: LaghuValidateAPI = (() => {
   "use strict";
   var EMAIL: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
