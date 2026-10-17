@@ -7,6 +7,7 @@ Clean slate per lets-build: no template ADRs carried over.
 
 | ADR                                                                                | Title                                               | Date       | Status                | Governs                                |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
+| [ADR-008](./memory.md#adr-008-enforce-100-test-coverage-and-clean-code-architecture) | Enforce 100% test coverage and Clean Code architecture | 2026-10-17 | ACCEPTED              | [`vitest.config.ts`](./vitest.config.ts) |
 | [ADR-007](./memory.md#adr-007-enforce-harness-parity-by-content-not-symlinks)      | Enforce harness parity by content, not symlinks     | 2026-10-17 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
 | [ADR-006](./memory.md#adr-006-cross-platform-toolchain-fix-and-governance-re-sync) | Cross-platform toolchain fix and governance re-sync | 2026-10-17 | ACCEPTED              | [`package.json`](./package.json)       |
 | [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code)             | Adopt azcodr governance, keep laghu code            | 2026-10-16 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
@@ -14,6 +15,14 @@ Clean slate per lets-build: no template ADRs carried over.
 | [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                        | Vitest TDD, units against src                       | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)            | TypeScript source, zero-build consumption           | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
 | [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline)        | Target Technology Stack & Scaffolding Baseline      | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
+
+#### ADR-008: Enforce 100% test coverage and Clean Code architecture
+
+- **Date:** 2026-10-17 | **Status:** ACCEPTED
+- **Context:** azcodr governance mandates strict 100% test coverage across all metrics (lines, statements, branches, functions) alongside Uncle Bob's Clean Code and Steve McConnell's Barricade Technique. Prior coverage stood at ~89-97% branches due to defensive fallback bloat inside internal routines (such as redundant Element type narrowings on private span holder nodes, redundant `actions || {}` fallbacks, unneeded `el.closest ? ... : null` checks, and `self._bN || 1`) and unexercised boundary conditions (DocumentFragment hydrations, keyed loop row reordering with index variables, empty string keys, custom directive empty attributes, and SSR bootstrap when document is absent).
+- **Decision:** Eliminate all redundant defensive branches in internal invariants per McConnell's Barricade Technique, implement deterministic unit tests for all boundary and lifecycle conditions, export lifecycle `init` hook on `LaghuAPI`, and lock strict 100% thresholds (`lines: 100`, `functions: 100`, `branches: 100`, `statements: 100`) directly in [`vitest.config.ts`](./vitest.config.ts).
+- **Consequences:** Every single branch, line, statement, and function across `src/laghu.ts`, `src/morph.ts`, `src/router.ts`, and `src/validate.ts` is verified under automated regression testing (194 passing tests). Gzip bundle size decreased from 10,297 bytes to 10,273 bytes (479 bytes below the 10,752 byte budget). Zero breaking changes to the public API surface.
+- **Enforced In:** [`vitest.config.ts`](./vitest.config.ts), [`src/laghu.ts`](./src/laghu.ts), [`test/unit/dom.test.ts`](./test/unit/dom.test.ts), [`test/unit/expr.test.ts`](./test/unit/expr.test.ts), [`test/unit/transitions.test.ts`](./test/unit/transitions.test.ts).
 
 #### ADR-007: Enforce harness parity by content, not symlinks
 
