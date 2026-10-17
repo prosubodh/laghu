@@ -6,6 +6,20 @@ major for breaking changes.
 
 ## [Unreleased]
 
+## [1.2.2]
+
+Packaging only; the runtime bundles are unchanged.
+
+- Global type augmentations (`window.Laghu` and the internal `_b*`
+  bookkeeping fields) moved out of the published modules into
+  `src/globals.ts`. The modules now contain no `declare global`, which
+  is what JSR requires — it rejects global augmentations because they
+  can change global types for unrelated packages.
+- The npm typing entry is now `dist/globals.d.ts`, which re-exports the
+  API surface and still declares `window.Laghu`, `window.LaghuRouter`,
+  `window.LaghuMorph` and `window.LaghuValidate` for `<script>` users.
+- Published to JSR as [`@prosubodh/laghu`](https://jsr.io/@prosubodh/laghu).
+
 ## [1.2.1]
 
 Reactivity fixes for state that appears after the first render:
