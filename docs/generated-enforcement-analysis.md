@@ -175,3 +175,10 @@ reproduction commands above now target removed files:
   `safety_guard.js` / `verify_completion.js` were already the implementations
   wired in `hooks.json`.
 - `validate_agentic_configs.sh` → removed; superseded by `scripts/validate-cli.js`.
+
+This is a deliberate divergence from upstream. azcodr 2.8.0 (ADR-023) ported
+`bootstrap_workspace.sh` to Node but **retains** the other three, because its
+`shell-scripts.test.ts` and `safety-guard.test.ts` pin them as the tested POSIX
+contract. laghu has no such tests, and nothing in laghu invokes them (`hooks.json`
+runs the `.js` twins), so a future scaffold re-sync must re-apply these three
+deletions rather than re-import them. See `memory.md` ADR-006.

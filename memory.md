@@ -5,13 +5,47 @@ Clean slate per lets-build: no template ADRs carried over.
 
 ### ADR Master Index
 
-| ADR                                                                         | Title                                          | Date       | Status                | Governs                                |
-| --------------------------------------------------------------------------- | ---------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
-| [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code)      | Adopt azcodr governance, keep laghu code       | 2026-10-16 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
-| [ADR-004](./memory.md#adr-004-azcodr-check-triage-scope-boundary)           | azcodr check triage scope boundary             | 2026-10-16 | SUPERSEDED by ADR-005 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
-| [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                 | Vitest TDD, units against src                  | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
-| [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)     | TypeScript source, zero-build consumption      | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
-| [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline) | Target Technology Stack & Scaffolding Baseline | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
+| ADR                                                                                | Title                                               | Date       | Status                | Governs                                |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
+| [ADR-006](./memory.md#adr-006-cross-platform-toolchain-fix-and-governance-re-sync) | Cross-platform toolchain fix and governance re-sync | 2026-10-17 | ACCEPTED              | [`package.json`](./package.json)       |
+| [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code)             | Adopt azcodr governance, keep laghu code            | 2026-10-16 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
+| [ADR-004](./memory.md#adr-004-azcodr-check-triage-scope-boundary)                  | azcodr check triage scope boundary                  | 2026-10-16 | SUPERSEDED by ADR-005 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                        | Vitest TDD, units against src                       | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)            | TypeScript source, zero-build consumption           | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
+| [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline)        | Target Technology Stack & Scaffolding Baseline      | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
+
+#### ADR-006: Cross-platform toolchain fix and governance re-sync
+
+- Status: ACCEPTED 2026-10-17
+- Context: the vendored `hooks.json` post-tool-lint hook runs
+  `npm run lint`, and `verify_completion.js` runs `npm run validate`
+  but silently skips it when the script is absent
+  (`typeof scripts.validate === "string"`). Neither script existed, so
+  every command errored in the hook and the Stop gate skipped its
+  checks without saying so. Four POSIX-only `.sh` files were also
+  inherited from the azcodr 2.7.1 scaffold, though this repo's stated
+  requirement is cross-platform tooling. Upstream then fixed the
+  scaffolder itself: azcodr 2.8.0 (ADR-023) ships
+  `bootstrap_workspace.mjs`, driven by `node`, and emits
+  `scripts/smoke_test.mjs`.
+- Decision: add the two missing scripts (`lint` -> `vp lint`,
+  `validate` -> `node scripts/validate-cli.js`) and exclude generated
+  `dist/` from lint so the new gate stays signal-only. Delete the
+  three POSIX-only duplicates that nothing here invokes or tests:
+  `safety_guard.sh` and `verify_completion.sh` (the `.js` twins are
+  what `hooks.json` runs) and `validate_agentic_configs.sh`
+  (superseded by `scripts/validate-cli.js`). Adopt the upstream
+  scaffolder port instead of maintaining a local one, so
+  `bootstrap_workspace.mjs` matches the released azcodr 2.8.0
+  artifact apart from Oxfmt formatting.
+- Consequences: laghu now diverges from the vendored `.agents/` by
+  exactly three files. Upstream RETAINS those scripts because
+  `shell-scripts.test.ts` and `safety-guard.test.ts` pin them; laghu
+  has no such tests (its suite is `test/unit/*.test.ts`) and nothing
+  here runs them, so a later scaffold re-sync must re-apply those
+  deletions rather than import dead weight. The scaffolder itself
+  needs no divergence: `scripts/smoke_test.mjs` is emitted upstream
+  and runs under `node`.
 
 #### ADR-005: Adopt azcodr governance, keep laghu code
 
