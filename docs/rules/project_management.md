@@ -36,7 +36,7 @@ A user story or task is only marked `DONE` when all of the following verifiable 
 
 - [ ] **Lifecycle Provenance**: Code developed strictly via the 5-Phase Agile Domain Lifecycle (Requirements ➔ Domain Analysis ➔ Outer Acceptance RED ➔ Inner Unit RED-GREEN-REFACTOR ➔ Outer GREEN). Zero production code written before tests.
 - [ ] **Tests Green**: 100.00% full-stack test coverage maintained across statement, branch, function, and line metrics (`npm test` / `pnpm test`).
-- [ ] **Boundary Verified**: Cross-package boundary smoke tests passed against live running servers (`scripts/smoke_test.sh`).
+- [ ] **Boundary Verified**: Cross-package boundary smoke tests passed against live running servers (`scripts/smoke_test.mjs`).
 - [ ] **Zero Lints & Types**: 0 ESLint warnings and 0 TypeScript compilation errors (`npm run lint && npm run typecheck`).
 - [ ] **No Unverified Assumptions**: All behavior backed by tests, schema invariants, or verified command evidence.
 - [ ] **ADR Logged**: An Architectural Decision Record is logged in `memory.md` if architectural trade-offs were made.

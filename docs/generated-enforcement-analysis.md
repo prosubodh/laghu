@@ -160,3 +160,18 @@ bash .agents/skills/lets-build/scripts/bootstrap_workspace.sh <tmp> backend pyth
 echo '{"tool_name":"run_command","tool_input":{"command":"rm -rf /"}}' \
   | node <scaffold>/.agents/scripts/agent_guard.js; echo "exit=$?"
 ```
+
+---
+
+## Postscript (2026-10-17): POSIX-only scripts removed
+
+The findings above are a point-in-time record and are left verbatim. Note,
+however, that the `.sh` scripts this analysis exercised no longer exist, so the
+reproduction commands above now target removed files:
+
+- `bootstrap_workspace.sh` → `.agents/skills/lets-build/scripts/bootstrap_workspace.mjs`
+  (faithful cross-platform Node port; emits `scripts/smoke_test.mjs`, not `.sh`).
+- `safety_guard.sh` / `verify_completion.sh` → removed; the cross-platform
+  `safety_guard.js` / `verify_completion.js` were already the implementations
+  wired in `hooks.json`.
+- `validate_agentic_configs.sh` → removed; superseded by `scripts/validate-cli.js`.

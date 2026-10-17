@@ -138,4 +138,4 @@ Before finalizing any agent configuration update, verify:
 - [references/agents_md_template.md](./references/agents_md_template.md): Boilerplate template for lean root and nested `AGENTS.md` files.
 - [references/skill_template.md](./references/skill_template.md): Boilerplate template for authoring production-grade `SKILL.md` files.
 - [references/refinement_workflow.md](./references/refinement_workflow.md): Step-by-step guide for capturing AI draft diffs against human edits to update skills.
-- [scripts/validate_agentic_configs.sh](./scripts/validate_agentic_configs.sh): Deterministic Bash script validating front matter, line ceilings, link health, and symlink parity.
+- [scripts/validate-cli.js](../../../scripts/validate-cli.js): Deterministic cross-platform validator (front matter, line ceilings, link health, symlink parity, ADR ledger, toolchain). This is the canonical validator; the former skill-local `validate_agentic_configs.sh` was a POSIX-only duplicate and has been removed.

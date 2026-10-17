@@ -33,6 +33,8 @@
   "jsdelivr": "dist/laghu.min.js",
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
+    "lint": "vp lint",
+    "validate": "node scripts/validate-cli.js",
     "build": "tsc -p tsconfig.build.json && node scripts/size.mjs",
     "test": "vitest run",
     "size": "node scripts/size.mjs",

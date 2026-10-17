@@ -53,7 +53,7 @@ flowchart TD
 3. **Inner Unit Tests with Test Doubles**: Unit test collaborators in isolation using test doubles and mocks (`Controllers/Handlers` ➔ `Use Cases` ➔ `Ports/Adapters`).
 4. **Mock Ownership Principle**: **Only mock types you own**. Always wrap third-party libraries, database drivers, and external network clients in application-owned port adapters before mocking.
 5. **Atomic Double Loop**: Follow the strict rhythm: **RED (Fail) ➔ GREEN (Pass) ➔ REFACTOR (Clean/De-duplicate)**. Never skip the Refactor phase.
-6. **Cross-Package Boundary Verification**: In monorepos with frontend dev servers or API gateways (Vite, NGINX), outer-loop verification must explicitly test reverse-proxy forwarding and real network serialization (`scripts/smoke_test.sh`), ensuring client-side SPA fallbacks do not mask unmapped backend routes.
+6. **Cross-Package Boundary Verification**: In monorepos with frontend dev servers or API gateways (Vite, NGINX), outer-loop verification must explicitly test reverse-proxy forwarding and real network serialization (`scripts/smoke_test.mjs`), ensuring client-side SPA fallbacks do not mask unmapped backend routes.
 
 ---
 

@@ -65,7 +65,7 @@ Prevent AI-generated code rot using automated fitness functions integrated into 
 
 ### Polyglot Fitness Function Standards
 
-When bootstrapping projects via `/lets-build`, `bootstrap_workspace.sh` emits the pinned gate configuration for the recorded language (never invented, never absent); the agent then installs the named tool, wires the project's lint entry to it, and proves the gate in Phase 5. Gates must match these exact rules:
+When bootstrapping projects via `/lets-build`, `bootstrap_workspace.mjs` emits the pinned gate configuration for the recorded language (never invented, never absent); the agent then installs the named tool, wires the project's lint entry to it, and proves the gate in Phase 5. Gates must match these exact rules:
 
 | Language              | Linter / Static Tool      | Max File Lines (300)                 | Max Function Lines (30)                        | Max Complexity (10)                                        | Max Arguments (3)                                  |
 | --------------------- | ------------------------- | ------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
