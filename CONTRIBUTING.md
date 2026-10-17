@@ -14,14 +14,14 @@
 ## Workflow
 
 1. Fork, branch, change, then run the full gate before pushing:
-   `npx tsc --noEmit -p jsconfig.json`, `node scripts/size.mjs`,
-   `npm test` (runs run, examples, apps, router suites).
-2. New examples go in `examples/` with coverage in
-   `test/examples.mjs`. New apps go in `apps/` with coverage in
-   `test/apps.mjs`.
-3. Docs live with code: JSDoc with `@example` on every public
-   function, TSDoc in `dist/laghu.d.ts`, README sections with
-   linked contents entries.
+   `npx tsc --noEmit -p tsconfig.json`, `npm run build`,
+   `npm test` (Vitest `test/unit`, 104 tests in ~2s).
+2. New examples go in `examples/` with scenarios ported to
+   `test/unit/` (examples stay documentation, never fixtures).
+   New apps go in `apps/` with coverage in `test/unit/apps.test.ts`.
+3. Docs live with code: real types plus TSDoc `@example` on every
+   public function, generated `dist/*.d.ts` (never hand-edited),
+   README sections with linked contents entries.
 4. Security-sensitive changes (sinks, paths, fetch, swaps) need
    regression tests proving the attack fails, not just the feature
    works.

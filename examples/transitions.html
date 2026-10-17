@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js - transitions</title>
+<div data-scope='{"open":false,"tab":"a"}'>
+  <p>
+    <button data-click="open = !open">toggle panel</button>
+    <button data-click="tab = 'a'">tab a</button>
+    <button data-click="tab = 'b'">tab b</button>
+  </p>
+  <div id="panel" data-show="open" data-transition="slide" data-duration="200">
+    sliding panel with enter and leave motion
+  </div>
+  <template data-if="tab === 'a'">
+    <p data-transition="fade">first tab fades in on insert</p>
+  </template>
+  <template data-if="tab === 'b'">
+    <p data-transition="scale">second tab scales in on insert</p>
+  </template>
+  <p>without animation attributes everything still toggles instantly.</p>
+</div>
+<script src="../dist/laghu.min.js"></script>

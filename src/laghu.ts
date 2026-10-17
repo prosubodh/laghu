@@ -1,64 +1,148 @@
-// @ts-check
 /**
- * laghu.js v1.0.0 - zero-build IIFE micro-framework.
+ * laghu core - zero-build IIFE micro-framework.
  *
- * What this file provides:
+ * What this module provides:
  * - Proxy based reactivity with per-binding effects (no Virtual DOM).
  * - Hydrate-in-place HTML bindings plus template based if/for lists.
  * - Two-way form bindings, declarative fetch with HTML or JSON swaps.
  * - Light-DOM Web Components with attribute to state sync.
  * - Strict CSP compliance: no new Function, no eval, no inline handlers.
  *
- * How to load it (no build step, works from file://):
+ * Consumed without a compiler: the build bundles this module to a
+ * plain-JS IIFE (`dist/laghu.js`, minified to `dist/laghu.min.js`)
+ * usable from a script tag or `file://`.
+ *
  *   <script src="laghu.min.js"></script>
  *   <script>Laghu.define('my-tag', () => ({ state: { n: 0 } }));</script>
- *
- * @typedef {Object} SetupResult
- * @property {Record<string, any>} [state] Initial state for one component instance.
- * @property {Record<string, Function>} [actions] Methods callable from data-click and data-on.
- * @property {string[]} [observed] Attribute names synced into state. Defaults to
- *   primitive state keys (string, number, boolean).
- * @property {(() => void)} [onMount] Runs once after the element is hydrated.
- * @property {(() => void)} [onUnmount] Reserved for pairing with onMount in user code.
  */
-(function () {
+
+export interface SetupResult {
+  /** Initial state for one component instance. */
+  state?: Record<string, any>;
+  /** Methods callable from data-click and data-on. */
+  actions?: Record<string, (...args: any[]) => void>;
+  /** Attribute names synced into state. Defaults to primitive state keys. */
+  observed?: string[];
+  /** Runs once after the element is hydrated. */
+  onMount?: (this: any) => void;
+  /** Runs on disconnect. Reserved pairing for onMount. */
+  onUnmount?: (this: any) => void;
+}
+
+export interface TriggerSpec {
+  on: string;
+  delay: number;
+  throttle: number;
+  once: boolean;
+  changed: boolean;
+  queue: string;
+  from: string;
+  every: number;
+  load: boolean;
+  revealed: boolean;
+}
+
+export interface DirectiveContext {
+  el: HTMLElement;
+  get(): any;
+  effect(f: () => void): () => void;
+  scope: any;
+}
+
+export interface LaghuAPI {
+  version: string;
+  define(tag: string, setup: () => SetupResult): any;
+  reactive<T extends object>(obj: T): T;
+  effect(fn: () => void): () => void;
+  eval(scope: any, expr: string): any;
+  get(scope: any, path: string): any;
+  set(scope: any, path: string, val: any): void;
+  parseTrigger(spec: string, el: Element): TriggerSpec;
+  swap(target: Element, html: string, swap: string, scope: any, actions?: Record<string, Function>): void;
+  css: string;
+  sanitize(fn: (html: string) => string): void;
+  hydrate(root: Element, state?: Record<string, any>, actions?: Record<string, Function>): any;
+  destroyTree(root: Element): void;
+  store(name: string, init?: any): any;
+  computed(fn: () => any): () => any;
+  watch(scope: any, expr: string, cb: (next: any, prev: any) => void): () => void;
+  persist(name: string, opts?: { key?: string; version?: number; debounce?: number }): any;
+  directive(name: string, fn: (ctx: DirectiveContext) => void | (() => void)): void;
+  /**
+   * Register a display filter for data-bind pipes:
+   * data-bind="price | currency". Unknown names warn and pass through.
+   */
+  filter(name: string, fn: (value: any, arg: string, scope: any) => any): void;
+  /**
+   * Make a child scope owning vars over a parent. Needed by custom
+   * renderers (router templates, hand-rolled lists): plain assignment
+   * on a Proxy-prototyped object would write the parent instead.
+   */
+  scope(parent: any, vars: Record<string, any>): any;
+}
+
+declare global {
+  interface Window {
+    Laghu: LaghuAPI;
+    __LAGHU_DEV__?: boolean;
+  }
+  // Internal bookkeeping fields laghu attaches to DOM nodes.
+  // Optional and underscore-prefixed; plugin authors may read
+  // _bScope but must never write these directly.
+  interface Element {
+    _bcu?: Array<Function>;
+    _bH?: Record<string, number>;
+    _bReq?: any;
+    _bReqs?: Set<any>;
+    _bN?: number;
+    _bScope?: any;
+    _bActions?: Record<string, Function>;
+    _bInit?: boolean;
+    _bPend?: Record<string, string | null> | null;
+    _bOnUnmount?: Function;
+  }
+  interface HTMLElement {
+    _bcu?: Array<Function>;
+    _bH?: Record<string, number>;
+    _bT?: number;
+    _bHide?: boolean;
+    _bVal?: boolean;
+    _bValForm?: boolean;
+    _bTried?: boolean;
+    _bTouched?: boolean;
+  }
+}
+
+export const Laghu: LaghuAPI = (() => {
   'use strict';
   var VERSION = '1.1.0';
   // Opt-in dev noise. Production stays silent unless handlers listen
   // for laghu:error / laghu:request-error, which always dispatch.
-  var DEV = typeof window !== 'undefined' && /** @type {any} */ (window).__LAGHU_DEV__ === true;
+  var DEV = typeof window !== 'undefined' && ((window) as any).__LAGHU_DEV__ === true;
 
-  /** @type {Map<string, any>} */
-  var stores = new Map();
-  /** @type {Map<string, Function>} */
-  var directives = new Map();
-  /** @type {WeakMap<object, Map<string, Set<Function>>>} */
-  var targetMap = new WeakMap();
+  var stores: Map<string, any> = new Map();
+  var directives: Map<string, Function> = new Map();
+  var targetMap: WeakMap<object, Map<string, Set<Function>>> = new WeakMap();
   /** Proxies created by reactive, so re-wrapping returns the same proxy
    * instead of stacking proxy-on-proxy traps. */
-  /** @type {WeakMap<object, any>} */
-  var proxyCache = new WeakMap();
-  /** @type {WeakSet<object>} */
-  var proxySet = new WeakSet();
-  /** @type {Function | null} */
-  var activeEffect = null;
-  /** @type {Set<Function>} */
-  var jobQueue = new Set();
+  var proxyCache: WeakMap<object, any> = new WeakMap();
+  var proxySet: WeakSet<object> = new WeakSet();
+  var activeEffect: Function | null = null;
+  var jobQueue: Set<Function> = new Set();
   var flushing = false;
   /** Attributes whose values can navigate or load code: scriptable
    * URLs are refused here (baseline; DOMPurify for untrusted input). */
-  /** @type {Record<string, number>} */
-  var URL_ATTRS = { href: 1, src: 1, action: 1, formaction: 1, cite: 1, poster: 1, data: 1, srcset: 1, srcdoc: 1 };
+  var URL_ATTRS: Record<string, number> = { href: 1, src: 1, action: 1, formaction: 1, cite: 1, poster: 1, data: 1, srcset: 1, srcdoc: 1 };
   /** Path segments that must never be read or written: prototype
    * pollution sinks and callable gadgets (constructor, toString).
    * @param {string} seg */
-  function badSeg(seg) {
+  function badSeg(seg: string) {
     return seg === '__proto__' || seg === 'constructor' || seg === 'prototype';
   }
   /** True for URL values that execute code (checked case-insensitively,
    * whitespace-insensitively, so casing tricks do not slip through).
    * @param {any} v */
-  function unsafeUrl(v) {
+  function unsafeUrl(v: any) {
     var s = String(v).replace(/[\s\x00-\x1f]+/g, '').toLowerCase();
     return s.indexOf('javascript:') === 0 || s.indexOf('data:text/html') === 0 || s.indexOf('vbscript:') === 0;
   }
@@ -70,27 +154,26 @@
    * @param {any} html
    * @returns {string}
    */
-  function defaultSanitize(html) {
+  function defaultSanitize(html: any) {
     var s = String(html);
     s = s.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, '');
     s = s.replace(/<\/?(iframe|object|embed|link|meta|base)[^>]*>/gi, '');
     s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-    s = s.replace(/(href|src|xlink:href|action|formaction|poster|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, function (m, a, q, d1, d2, d3) {
+    s = s.replace(/(href|src|xlink:href|action|formaction|poster|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, function (m: any, a: any, q: any, d1: any, d2: any, d3: any) {
       var v = d1 !== undefined ? d1 : (d2 !== undefined ? d2 : d3);
       if (unsafeUrl(v)) return a + '="#"';
       return m;
     });
     return s;
   }
-  /** @type {(html: string) => string} */
-  var sanitize = defaultSanitize;
+  var sanitize: (html: string) => string = defaultSanitize;
 
   /**
    * Report a runtime failure. Always dispatches laghu:error on document
    * (so production has signal without console noise); logs only in dev.
    * @param {any} err
    */
-  function reportError(err) {
+  function reportError(err: any) {
     try {
       if (typeof document !== 'undefined' && document.dispatchEvent) {
         document.dispatchEvent(new CustomEvent('laghu:error', {
@@ -109,14 +192,13 @@
     }
   }
   /** @param {Function} fn */
-  function schedule(fn) {
+  function schedule(fn: Function) {
     jobQueue.add(fn);
     if (!flushing) { flushing = true; Promise.resolve().then(flush); }
   }
-  /** Nesting stack so inner effects never clobber outer dependencies. @type {Array<Function>} */
-  var effectStack = [];
-  /** @type {WeakMap<Function, Array<Set<Function>>>} */
-  var runDeps = new WeakMap();
+  /** Nesting stack so inner effects never clobber outer dependencies. */
+  var effectStack: Array<Function> = [];
+  var runDeps: WeakMap<Function, Array<Set<Function>>> = new WeakMap();
   /**
    * Run a function now and re-run it whenever reactive state it read
    * changes. Each DOM binding creates one effect, so updates touch only
@@ -137,10 +219,9 @@
    * @param {Function} fn Work to run and re-run on dependency change.
    * @returns {Function} Call to unsubscribe the effect.
    */
-  function effect(fn) {
+  function effect(fn: Function) {
     var stopped = false;
-    /** @type {Array<Set<Function>>} */
-    var deps = [];
+    var deps: Array<Set<Function>> = [];
     var run = function () {
       if (stopped) return;
       // Drop last run's subscriptions first: conditional branches
@@ -165,7 +246,7 @@
     };
   }
   /** @param {object} t @param {string} k */
-  function track(t, k) {
+  function track(t: object, k: string) {
     if (!activeEffect) return;
     var m = targetMap.get(t);
     if (!m) { m = new Map(); targetMap.set(t, m); }
@@ -176,15 +257,22 @@
     if (arr) arr.push(s);
   }
   /** @param {object} t @param {string} k */
-  function trigger(t, k) {
+  function trigger(t: object, k: string) {
     var m = targetMap.get(t);
     if (!m) return;
     var s = m.get(k);
     if (!s) return;
-    s.forEach(function (fn) { schedule(fn); });
+    s.forEach(function (fn: any) { schedule(fn); });
   }
   /** @param {any} v @returns {boolean} */
-  function isObj(v) { return v !== null && typeof v === 'object'; }
+  function isObj(v: any) { return v !== null && typeof v === 'object'; }
+  /**
+   * Key presence without narrowing the value. Using `in` directly on
+   * an `any` reference makes later property reads fail strict checks.
+   */
+  function hasKey(o: any, k: string): boolean {
+    return !!o && (k in o);
+  }
   /**
    * Make a child scope that inherits a parent while owning the given
    * variables. Uses defineProperty because plain assignment on an
@@ -199,7 +287,7 @@
    * @param {Record<string, any>} vars Variables owned by the child.
    * @returns {any} Child scope.
    */
-  function childScope(scope, vars) {
+  function childScope(scope: any, vars: Record<string, any>) {
     var o = Object.create(scope);
     for (var k in vars) {
       if (Object.prototype.hasOwnProperty.call(vars, k)) {
@@ -229,7 +317,7 @@
    * @param {string} path Dotted path such as "user.name".
    * @returns {any} Value at the path, or undefined.
    */
-  function getPath(scope, path) {
+  function getPath(scope: any, path: string) {
     if (!path) return undefined;
     var parts = String(path).split('.');
     var head = parts[0].trim();
@@ -275,7 +363,7 @@
    * @param {string} path Dotted path such as "user.name".
    * @param {any} val Value to store.
    */
-  function setPath(scope, path, val) {
+  function setPath(scope: any, path: string, val: any) {
     var parts = String(path).split('.');
     for (var g = 0; g < parts.length; g++) {
       if (badSeg(parts[g].trim())) {
@@ -327,19 +415,19 @@
    * @param {object} obj Plain object or array to make reactive.
    * @returns {any} Reactive proxy around the same data.
    */
-  function reactive(obj) {
+  function reactive(obj: object) {
     if (!isObj(obj)) return obj;
     if (proxySet.has(obj)) return obj;
     var hit = proxyCache.get(obj);
     if (hit) return hit;
     var proxy = new Proxy(obj, {
-      get: function (t, p, r) {
+      get: function (t: any, p: any, r: any) {
         if (typeof p === 'string') track(t, p);
         var v = Reflect.get(t, p, r);
         return isObj(v) ? reactive(v) : v;
       },
-      set: function (/** @type {any} */ t, p, v) {
-        var old = t[/** @type {string} */ (p)];
+      set: function (t: any, p: any, v: any) {
+        var old = t[((p) as string)];
         var ok = Reflect.set(t, p, v);
         if (old !== v && typeof p === 'string') {
           trigger(t, p);
@@ -350,7 +438,7 @@
         }
         return ok;
       },
-      deleteProperty: function (t, p) {
+      deleteProperty: function (t: any, p: any) {
         var ok = Reflect.deleteProperty(t, p);
         if (typeof p === 'string') {
           trigger(t, p);
@@ -365,7 +453,7 @@
     return proxy;
   }
   /** @param {string} s @param {string} op @returns {string[]} */
-  function splitTop(s, op) {
+  function splitTop(s: string, op: string) {
     var out = []; var depth = 0; var q = null; var cur = '';
     for (var i = 0; i < s.length; i++) {
       var c = s[i];
@@ -385,7 +473,7 @@
    * @param {string} s @param {string} chars
    * @returns {number} Index, or -1 when absent.
    */
-  function lastTopOp(s, chars) {
+  function lastTopOp(s: string, chars: string) {
     var depth = 0, q = null;
     for (var i = s.length - 1; i > 0; i--) {
       var c = s[i];
@@ -403,7 +491,7 @@
    * @param {string} s
    * @returns {Array<string>|null} [cond, yes, no] or null.
    */
-  function splitTernary(s) {
+  function splitTernary(s: string) {
     var depth = 0, q = null, qi = -1;
     var i;
     for (i = 0; i < s.length; i++) {
@@ -434,6 +522,9 @@
    * string/number/true/false/null literals, not (!), arithmetic
    * (+ - * / %), comparisons, and/or (&&, ||), ternary (a ? b : c),
    * and calls with evaluated arguments such as "total(qty)".
+   * A whole string that resolves as a path wins over operators, so
+   * kebab-case keys ("t-read", "my-value") read literally whenever
+   * they exist; "count-1" still subtracts when no such key exists.
    * Anything else returns undefined. Unknown method names warn in dev.
    *
    * @example
@@ -447,9 +538,14 @@
    * @param {string} expr Expression text from a data-* attribute.
    * @returns {any} Result of the expression.
    */
-  function evalExpr(scope, expr) {
+  function evalExpr(scope: any, expr: string): any {
     var s = String(expr).trim();
     if (!s) return undefined;
+    // A literal path wins over operators: kebab-case keys, store names,
+    // and dotted paths resolve whole before any arithmetic is tried.
+    // 'count-1' still subtracts when no such key exists.
+    var direct = getPath(scope, s);
+    if (direct !== undefined) return direct;
     var ter0 = splitTernary(s);
     if (ter0) return evalExpr(scope, ter0[0]) ? evalExpr(scope, ter0[1]) : evalExpr(scope, ter0[2]);
     var or = splitTop(s, '||');
@@ -466,7 +562,7 @@
     }
     var m = s.match(/^(.*?)(===|!==|>=|<=|==|!=|>|<)(.*)$/);
     if (m) {
-      /** @type {any} */ var L = evalExpr(scope, m[1]); /** @type {any} */ var R = evalExpr(scope, m[3]); var op = m[2];
+      var L: any = evalExpr(scope, m[1]); var R: any = evalExpr(scope, m[3]); var op = m[2];
       if (op === '>') return L > R;
       if (op === '<') return L < R;
       if (op === '>=') return L >= R;
@@ -479,15 +575,15 @@
     var ai = lastTopOp(s, '+-');
     if (ai > 0 && s.slice(0, ai).trim() && s.slice(ai + 1).trim()) {
       var lop = s[ai];
-      /** @type {any} */ var la = evalExpr(scope, s.slice(0, ai));
-      /** @type {any} */ var ra = evalExpr(scope, s.slice(ai + 1));
+      var la: any = evalExpr(scope, s.slice(0, ai));
+      var ra: any = evalExpr(scope, s.slice(ai + 1));
       return lop === '+' ? la + ra : la - ra;
     }
     var mi = lastTopOp(s, '*/%');
     if (mi > 0 && s.slice(0, mi).trim() && s.slice(mi + 1).trim()) {
       var mop = s[mi];
-      /** @type {any} */ var lm = evalExpr(scope, s.slice(0, mi));
-      /** @type {any} */ var rm = evalExpr(scope, s.slice(mi + 1));
+      var lm: any = evalExpr(scope, s.slice(0, mi));
+      var rm: any = evalExpr(scope, s.slice(mi + 1));
       if (mop === '*') return lm * rm;
       if (mop === '/') return lm / rm;
       return lm % rm;
@@ -533,7 +629,7 @@
             var fn = getPath(scope, cname);
             if (typeof fn === 'function') {
               var raw = s.slice(op2 + 1, match).trim();
-              var args = raw ? splitTop(raw, ',').map(function (a) { return evalExpr(scope, a); }) : [];
+              var args = raw ? splitTop(raw, ',').map(function (a: any) { return evalExpr(scope, a); }) : [];
               return fn.apply(scope, args);
             }
             if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown method "' + s + '"');
@@ -547,8 +643,7 @@
     if (br && br[1]) {
       var base = evalExpr(scope, br[1]);
       if (base === null || base === undefined) return undefined;
-      /** @type {any} */
-      var key = br[2];
+      var key: any = br[2];
       if (key[0] === '"' || key[0] === "'") key = key.slice(1, -1);
       else key = Number(key);
       if (typeof key === 'string' && badSeg(key)) return undefined;
@@ -570,7 +665,7 @@
    * @param {Record<string, Function>} actions Named actions of the component.
    * @param {string} code Raw attribute text, for example "increment".
    */
-  function execAction(scope, actions, code) {
+  function execAction(scope: any, actions: Record<string, Function>, code: string) {
     var s = String(code).trim();
     if (!s) return;
     var inc = s.match(/^([\w.$]+)\+\+$/);
@@ -601,17 +696,125 @@
    * time, so typos fail visibly in any environment.
    * @param {string} s
    */
-  function unknownAction(s) {
+  function unknownAction(s: string) {
     if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown action "' + s + '"');
     if (typeof CustomEvent !== 'undefined' && typeof document !== 'undefined' && document.dispatchEvent) {
       document.dispatchEvent(new CustomEvent('laghu:unknown-action', { detail: { name: s } }));
     }
   }
   /** @param {Element} el @param {Function} fn */
-  function onCleanup(el, fn) {
-    var list = /** @type {any} */ (el)._bcu;
-    if (!list) { list = []; /** @type {any} */ (el)._bcu = list; }
+  function onCleanup(el: Element, fn: Function) {
+    var list = el._bcu;
+    if (!list) { list = []; el._bcu = list; }
     list.push(fn);
+  }
+  /**
+   * Element lists that include the root itself. querySelectorAll only
+   * sees descendants, so without these an island or component tag
+   * carrying its own data-* attributes (a form with data-post, a root
+   * with data-bind) would silently never wire.
+   */
+  /**
+   * @param {Element} root
+   * @param {string} sel
+   * @param {(node: Element) => void} fn
+   */
+  function eachEl(root: Element, sel: string, fn: (node: Element) => void) {
+    if (root instanceof Element && root.matches) {
+      try { if (root.matches(sel)) fn(root); } catch (e) {}
+    }
+    Array.prototype.forEach.call(root.querySelectorAll(sel), fn);
+  }
+  function allEls(root: Element) {
+    var out: Array<Element> = [];
+    if (root instanceof Element) out.push(root);
+    Array.prototype.forEach.call(root.querySelectorAll('*'), function (n: Element) { out.push(n); });
+    return out;
+  }
+  /**
+   * WAAPI keyframes for a preset, forward (enter) or reversed (leave).
+   * Shared by toggles and inserts so presets stay defined once.
+   */
+  function transFrames(kind: string, out: boolean) {
+    var from = kind.indexOf('slide') >= 0 ? 'translateY(-8px)' : (kind.indexOf('scale') >= 0 ? 'scale(.96)' : 'none');
+    var a = { opacity: '0', transform: from };
+    var b = { opacity: '1', transform: 'none' };
+    return out ? [b, a] : [a, b];
+  }
+  /**
+   * Transition duration in ms from data-duration (default 150).
+   */
+  function transDur(el: Element): number {
+    return parseMs(el.getAttribute('data-duration') || '150ms') || 150;
+  }
+  /**
+   * Show or hide with an optional WAAPI transition. data-transition
+   * picks a preset (fade, slide, scale), data-duration sets
+   * milliseconds (default 150). Instant when no preset, when
+   * reduced-motion is requested, or when animate() is missing
+   * (jsdom, old browsers): behavior never depends on animation.
+   * Overlapping toggles cancel: only the latest intent applies.
+   * @param {HTMLElement} el
+   * @param {boolean} hide
+   */
+  function setHidden(el: HTMLElement, hide: boolean) {
+    hide = !!hide;
+    if (!!el.hidden === hide) return;
+    // First application is instant: mounting hidden content must not
+    // play a leave, and mounting visible content must not flash in.
+    // Only genuine transitions animate after this baseline.
+    var seen = (el as any)._bT;
+    if (seen === undefined) {
+      (el as any)._bT = 0;
+      el.hidden = hide;
+      return;
+    }
+    var kind = (el.getAttribute && el.getAttribute('data-transition')) || '';
+    var reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!kind || kind === 'none' || reduce || typeof el.animate !== 'function') {
+      el.hidden = hide;
+      return;
+    }
+    var dur = transDur(el);
+    var tk = (((el) as any)._bT = ((((el) as any)._bT) || 0) + 1);
+    ((el) as any)._bHide = hide;
+    if (!hide) {
+      el.hidden = false;
+      try {
+        var a = el.animate(transFrames(kind, false), { duration: dur, easing: 'ease-out' });
+        if (a && a.finished && a.finished.catch) a.finished.catch(function () {});
+      } catch (e) {}
+    } else {
+      try {
+        var a2 = el.animate(transFrames(kind, true), { duration: dur, easing: 'ease-in' });
+        var done = function () {
+          if (((el) as any)._bT === tk && ((el) as any)._bHide && el.isConnected) el.hidden = true;
+        };
+        if (a2 && a2.finished && a2.finished.then) a2.finished.then(done, done);
+        else setTimeout(done, dur);
+      } catch (e) { el.hidden = true; }
+    }
+  }
+  /**
+   * Play enter animations for fresh content (template inserts, new
+   * list rows). Only nodes carrying data-transition animate, so
+   * plain inserts cost nothing. The root itself counts.
+   * @param {Element} root
+   */
+  function playEnter(root: Element) {
+    eachEl(root, '[data-transition]', function (node: any) {
+      var el = ((node) as HTMLElement);
+      if (el.hidden) return;
+      var kind = el.getAttribute('data-transition') || '';
+      if (!kind || kind === 'none') return;
+      if (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (typeof el.animate !== 'function') return;
+      var dur = transDur(el);
+      try {
+        var a = el.animate(transFrames(kind, false), { duration: dur, easing: 'ease-out' });
+        if (a && a.finished && a.finished.catch) a.finished.catch(function () {});
+      } catch (e) {}
+    });
   }
   /**
    * One binding per element per kind. hydrate rescans whole subtrees
@@ -623,28 +826,28 @@
    * @param {string} key Binding kind, for example "click" or "bind".
    * @returns {boolean} True when already wired, meaning skip.
    */
-  function claimed(el, key) {
-    var host = /** @type {any} */ (el);
+  function claimed(el: Element, key: string) {
+    var host = ((el) as any);
     var map = host._bH || (host._bH = {});
     if (map[key]) return true;
     map[key] = 1;
     return false;
   }
   /** @param {Element} root */
-  function destroyTree(root) {
-    if (/** @type {any} */ (root)._bcu) {
-      /** @type {any} */ (root)._bcu.forEach(function (/** @type {Function} */ fn) { try { fn(); } catch (e) {} });
-      /** @type {any} */ (root)._bcu = [];
+  function destroyTree(root: Element) {
+    if (((root) as any)._bcu) {
+      ((root) as any)._bcu.forEach(function (fn: Function) { try { fn(); } catch (e) {} });
+      ((root) as any)._bcu = [];
     }
-    /** @type {any} */ (root)._bH = undefined;
+    ((root) as any)._bH = undefined;
     var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
     for (var i = 0; i < kids.length; i++) {
-      var c = /** @type {any} */ (kids[i]);
-      if (c._bcu) { c._bcu.forEach(function (/** @type {Function} */ fn) { try { fn(); } catch (e) {} }); c._bcu = []; }
+      var c = ((kids[i]) as any);
+      if (c._bcu) { c._bcu.forEach(function (fn: Function) { try { fn(); } catch (e) {} }); c._bcu = []; }
       c._bH = undefined;
       if (c._bReq) { try { c._bReq.abort(); } catch (e) {} c._bReq = null; }
     }
-    var self = /** @type {any} */ (root);
+    var self = ((root) as any);
     if (self._bReq) { try { self._bReq.abort(); } catch (e) {} self._bReq = null; }
   }
   /**
@@ -655,7 +858,7 @@
    * @param {string|null} raw Raw attribute text.
    * @returns {Record<string, any>} Parsed object, or empty on error.
    */
-  function parseScope(raw) {
+  function parseScope(raw: string|null) {
     if (!raw) return {};
     try { return JSON.parse(raw); } catch (e) {
       if (DEV && typeof console !== 'undefined') console.warn('[laghu] data-scope must be JSON. Got: ' + raw);
@@ -676,7 +879,7 @@
    * @param {any} cur Current state value, used only for its type.
    * @returns {any} Converted value.
    */
-  function coerceAttr(raw, cur) {
+  function coerceAttr(raw: string|null|undefined, cur: any) {
     if (raw === null || raw === undefined) return cur;
     if (typeof cur === 'boolean') return raw !== 'false' && raw !== '0';
     if (typeof cur === 'number') { var n = Number(raw); return isNaN(n) ? cur : n; }
@@ -686,14 +889,14 @@
     return raw;
   }
   /** @param {string} s @returns {number} */
-  function parseMs(s) {
+  function parseMs(s: string) {
     var m = String(s).trim().match(/^(\d+(?:\.\d+)?)(ms|s)?$/);
     if (!m) return 0;
     var n = parseFloat(m[1]);
     return m[2] === 's' ? n * 1000 : n;
   }
   /** @param {Element} el @returns {string} */
-  function defaultEvent(el) {
+  function defaultEvent(el: Element) {
     var t = el.tagName;
     if (t === 'FORM') return 'submit';
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return 'change';
@@ -715,6 +918,9 @@
    * from listens on another root (document, body, or a selector matched
    * against the event target). every polls on an interval. load fires once
    * the document is ready. revealed fires when the element scrolls into view.
+   * Automatic firings (every, load, revealed) combine with the event
+   * listener: data-trigger="load" on a button loads on ready and still
+   * reloads on click.
    *
    * @example
    * Laghu.parseTrigger('click delay:500ms once', btn);
@@ -726,9 +932,8 @@
    *   changed: boolean, queue: string, from: string, every: number,
    *   load: boolean, revealed: boolean}} Parsed trigger.
    */
-  function parseTrigger(spec, el) {
-    /** @type {any} */
-    var out = { on: '', delay: 0, throttle: 0, once: false, changed: false, queue: 'last', from: '', every: 0, load: false, revealed: false };
+  function parseTrigger(spec: string, el: Element) {
+    var out: any = { on: '', delay: 0, throttle: 0, once: false, changed: false, queue: 'last', from: '', every: 0, load: false, revealed: false };
     var s = String(spec || '').trim();
     if (!s) { out.on = defaultEvent(el); return out; }
     var m;
@@ -761,14 +966,14 @@
    * @param {(e: Event) => void} fn Handler to call when the trigger fires.
    * @returns {Function} Call to detach everything this binding created.
    */
-  function bindTrigger(el, spec, fn) {
+  function bindTrigger(el: Element, spec: string, fn: (e: Event) => void) {
     var t = parseTrigger(spec, el);
-    /** @type {any} */ var state = { timer: 0, lastFire: 0, lastVal: null, done: false };
-    var fire = function (/** @type {Event} */ e) {
+    var state: any = { timer: 0, lastFire: 0, lastVal: null, done: false };
+    var fire = function (e: Event) {
       if (state.done) return;
-      var input = /** @type {any} */ (el);
-      if (t.changed && ('value' in input || 'checked' in input)) {
-        var v = ('type' in input && (input.type === 'checkbox' || input.type === 'radio')) ? String(input.checked) + ':' + String(input.value) : String(input.value);
+      var input: any = el;
+      if (t.changed && (hasKey(input, 'value') || hasKey(input, 'checked'))) {
+        var v = (input.type === 'checkbox' || input.type === 'radio') ? String(input.checked) + ':' + String(input.value) : String(input.value);
         if (v === state.lastVal) return;
         state.lastVal = v;
       }
@@ -784,58 +989,129 @@
         state.timer = /** @type {any} */ (setTimeout(run, t.delay));
       } else run();
     };
-    var cleanup = function () {};
-    var listenOn = /** @type {any} */ (el);
+    var cleanups: Array<Function> = [];
+    var cleanup = function () {
+      for (var ci = 0; ci < cleanups.length; ci++) {
+        try { cleanups[ci](); } catch (e) {}
+      }
+      clearTimeout(state.timer);
+    };
+    var listenOn = ((el) as any);
     if (t.from === 'document' && typeof document !== 'undefined') listenOn = document;
     else if (t.from === 'body' && typeof document !== 'undefined') listenOn = document.body;
     else if (t.from && typeof document !== 'undefined') {
       var root = document;
-      var h = function (/** @type {Event} */ e) {
-        var tgt = /** @type {any} */ (e.target);
+      var h = function (e: Event) {
+        var tgt = ((e.target) as any);
         if (tgt && tgt.closest && tgt.closest(t.from)) fire(e);
       };
       root.addEventListener(t.on, h);
-      cleanup = function () { root.removeEventListener(t.on, h); clearTimeout(state.timer); };
+      cleanups.push(function () { root.removeEventListener(t.on, h); });
       onCleanup(el, cleanup);
       return cleanup;
     }
+    // Automatic firings (every, load, revealed) arm independently and
+    // combine with the event listener below, so data-trigger="load"
+    // on a button loads once on ready and still reloads on click.
     if (t.every) {
-      var id = setInterval(function () { fn(new CustomEvent('laghu:poll')); }, t.every);
-      cleanup = function () { clearInterval(id); clearTimeout(state.timer); };
-      onCleanup(el, cleanup);
-      return cleanup;
+      var id = setInterval(function () { fire(new CustomEvent('laghu:poll')); }, t.every);
+      cleanups.push(function () { clearInterval(id); });
     }
     if (t.load) {
       if (typeof document !== 'undefined' && document.readyState === 'loading') {
         var lh = function () { fire(new CustomEvent('laghu:load')); };
         document.addEventListener('DOMContentLoaded', lh, { once: true });
-        cleanup = function () { document.removeEventListener('DOMContentLoaded', lh); };
+        cleanups.push(function () { document.removeEventListener('DOMContentLoaded', lh); });
       } else {
         var runNow = function () { fire(new CustomEvent('laghu:load')); };
         if (typeof queueMicrotask !== 'undefined') queueMicrotask(runNow); else setTimeout(runNow, 0);
-        cleanup = function () {};
       }
-      onCleanup(el, cleanup);
-      return cleanup;
     }
     if (t.revealed) {
       if (typeof IntersectionObserver !== 'undefined') {
-        var io = new IntersectionObserver(function (es) {
-          es.forEach(function (en) { if (en.isIntersecting) { fire(new CustomEvent('laghu:revealed')); if (t.once) io.disconnect(); } });
+        var io = new IntersectionObserver(function (es: any) {
+          es.forEach(function (en: any) { if (en.isIntersecting) { fire(new CustomEvent('laghu:revealed')); if (t.once) io.disconnect(); } });
         });
         io.observe(el);
-        cleanup = function () { io.disconnect(); clearTimeout(state.timer); };
+        cleanups.push(function () { io.disconnect(); });
       } else {
         fire(new CustomEvent('laghu:revealed'));
-        cleanup = function () {};
       }
-      onCleanup(el, cleanup);
-      return cleanup;
     }
     listenOn.addEventListener(t.on, fire);
-    cleanup = function () { listenOn.removeEventListener(t.on, fire); clearTimeout(state.timer); };
+    cleanups.push(function () { listenOn.removeEventListener(t.on, fire); });
     onCleanup(el, cleanup);
     return cleanup;
+  }
+  /** Display filters: name to (value, arg, scope) => value. */
+  var filters: Map<string, Function> = new Map();
+  function numArg(a: string): number {
+    var n = Number(a);
+    return isNaN(n) ? 0 : n;
+  }
+  function strArg(a: string): string {
+    var s = String(a == null ? '' : a);
+    if (s.length > 1 && ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'"))) {
+      return s.slice(1, -1);
+    }
+    return s;
+  }
+  [
+    ['uppercase', function (v: any) { return String(v ?? '').toUpperCase(); }],
+    ['lowercase', function (v: any) { return String(v ?? '').toLowerCase(); }],
+    ['json', function (v: any) { try { return JSON.stringify(v); } catch (e) { return String(v); } }],
+    ['fixed', function (v: any, a: any) { var n = Number(v); return isNaN(n) ? String(v ?? '') : n.toFixed(numArg(strArg(a))); }],
+    ['currency', function (v: any, a: any) { var n = Number(v); var c = strArg(a) || '$'; return isNaN(n) ? String(v ?? '') : c + n.toFixed(2); }],
+    ['date', function (v: any, a: any) { var d = new Date(v); return isNaN(d.getTime()) ? '' : d.toLocaleDateString(strArg(a) || undefined); }],
+    ['default', function (v: any, a: any) { return (v === null || v === undefined || v === '') ? strArg(a) : v; }],
+    ['join', function (v: any, a: any) { return Array.isArray(v) ? v.join(a === '' ? ', ' : strArg(a)) : v; }],
+    ['length', function (v: any) { return v == null ? 0 : (v.length === undefined ? 0 : v.length); }]
+  ].forEach(function (p: any) { filters.set(p[0], p[1]); });
+  /**
+   * Split "expr | filter[:arg] | ..." on top-level single pipes.
+   * Double pipes (||) stay logical-or; quotes and parens shield pipes.
+   * @returns [expression, [[name, arg], ...]]
+   */
+  function splitFilters(s: string): [string, Array<[string, string]>] {
+    var depth = 0, q: string | null = null, cur = '', parts: string[] = [];
+    for (var i = 0; i < s.length; i++) {
+      var c = s[i];
+      if (q) { cur += c; if (c === q && s[i - 1] !== '\\') q = null; continue; }
+      if (c === '"' || c === "'") { q = c; cur += c; continue; }
+      if (c === '(' || c === '[') depth++;
+      if (c === ')' || c === ']') depth--;
+      if (c === '|' && depth === 0) {
+        if (s[i + 1] === '|') { cur += '||'; i++; continue; }
+        parts.push(cur); cur = '';
+        continue;
+      }
+      cur += c;
+    }
+    parts.push(cur);
+    var expr = parts.shift() || '';
+    var filtersOut: Array<[string, string]> = parts.map(function (p) {
+      var ci = p.indexOf(':');
+      if (ci < 0) return [p.trim(), ''];
+      return [p.slice(0, ci).trim(), p.slice(ci + 1).trim()];
+    });
+    return [expr, filtersOut];
+  }
+  /**
+   * Run one display expression through its filter chain.
+   * Unknown filters warn in dev and pass the value through.
+   */
+  function filterValue(scope: any, expr: string, chain: Array<[string, string]>): any {
+    var v = evalExpr(scope, expr);
+    for (var i = 0; i < chain.length; i++) {
+      var fn = filters.get(chain[i][0]);
+      if (typeof fn !== 'function') {
+        if (DEV && typeof console !== 'undefined') console.warn('[laghu] unknown filter "' + chain[i][0] + '"');
+        continue;
+      }
+      try { v = fn(v, chain[i][1], scope); }
+      catch (e) { reportError(e); return v; }
+    }
+    return v;
   }
   /**
    * Scan a root element once and wire every laghu attribute found inside.
@@ -864,7 +1140,7 @@
    * @param {Record<string, any>} state State object, made reactive by the caller path.
    * @param {Record<string, Function>} [actions] Named actions for click and event handlers.
    */
-  function hydrate(root, state, actions) {
+  function hydrate(root: Element, state: Record<string, any>, actions: Record<string, Function>) {
     actions = actions || {};
     var scope = state;
     // Seed the shared fetch-error slot before any binding reads it, so
@@ -873,26 +1149,29 @@
     try {
       if (isObj(scope) && !('$error' in Object(scope))) setPath(scope, '$error', null);
     } catch (e) {}
-    if (root instanceof Element && /** @type {any} */ (root).hasAttribute && /** @type {any} */ (root).hasAttribute('data-scope') && !/** @type {any} */ (root)._bScope) {
-      /** @type {any} */ (root)._bScope = scope;
+    if (root instanceof Element && ((root) as any).hasAttribute && ((root) as any).hasAttribute('data-scope') && !((root) as any)._bScope) {
+      ((root) as any)._bScope = scope;
     }
-    root.querySelectorAll('[data-bind],[data-text]').forEach(function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-bind],[data-text]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (claimed(el, 'bind')) return;
       var path = el.getAttribute('data-bind') || el.getAttribute('data-text') || '';
-      var stop = effect(function () { el.textContent = String(evalExpr(scope, path) ?? ''); });
+      var split = splitFilters(path);
+      var stop = effect(function () {
+        el.textContent = String(filterValue(scope, split[0], split[1]) ?? '');
+      });
       onCleanup(el, stop);
     });
-    root.querySelectorAll('[data-html]').forEach(function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-html]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (claimed(el, 'html')) return;
       var path = el.getAttribute('data-html') || '';
       var stop = effect(function () { el.innerHTML = sanitize(String(evalExpr(scope, path) ?? '')); });
       onCleanup(el, stop);
     });
-    Array.prototype.forEach.call(root.querySelectorAll('*'), function (node) {
-      var el = /** @type {HTMLElement} */ (node);
-      Array.prototype.forEach.call(el.attributes || [], function (/** @type {Attr} */ a) {
+    Array.prototype.forEach.call(allEls(root), function (node: any) {
+      var el = ((node) as HTMLElement);
+      Array.prototype.forEach.call(el.attributes || [], function (a: Attr) {
         var an = a.name;
         if (an.indexOf('data-bind:') === 0) {
           if (claimed(el, 'a:' + an)) return;
@@ -920,15 +1199,15 @@
           var e3 = a.value;
           var s3 = effect(function () {
             var v = evalExpr(scope, e3);
-            /** @type {any} */ (el.style)[prop] = v === false || v === null || v === undefined ? '' : String(v);
+            ((el.style) as any)[prop] = v === false || v === null || v === undefined ? '' : String(v);
           });
           onCleanup(el, s3);
         }
       });
     });
     // two-way model: text/number/checkbox/radio/select/textarea
-    root.querySelectorAll('[data-model]').forEach(function (node) {
-      var el = /** @type {any} */ (node);
+    eachEl(root, '[data-model]', function (node: any) {
+      var el = ((node) as any);
       if (claimed(el, 'model')) return;
       var path = el.getAttribute('data-model') || '';
       var isCheck = el.type === 'checkbox';
@@ -947,7 +1226,7 @@
           el.checked = String(v ?? '') === String(el.value);
         } else if (isSelect) {
           var arr = Array.isArray(v) ? v.map(String) : [];
-          Array.prototype.forEach.call(el.options || [], function (/** @type {any} */ o) { o.selected = arr.indexOf(String(o.value)) >= 0; });
+          Array.prototype.forEach.call(el.options || [], function (o: any) { o.selected = arr.indexOf(String(o.value)) >= 0; });
         } else if (el.tagName === 'SELECT' || el.value !== undefined) {
           el.value = v === undefined || v === null ? '' : String(v);
         }
@@ -965,8 +1244,8 @@
             setPath(scope, path, arr);
           } else setPath(scope, path, el.checked);
         } else if (isSelect) {
-          /** @type {any[]} */ var out = [];
-          Array.prototype.forEach.call(el.selectedOptions || [], function (/** @type {any} */ o) { out.push(o.value); });
+          var out: any[] = [];
+          Array.prototype.forEach.call(el.selectedOptions || [], function (o: any) { out.push(o.value); });
           setPath(scope, path, out);
         } else if (el.type === 'number' || el.getAttribute('data-type') === 'number') {
           setPath(scope, path, el.value === '' ? null : Number(el.value));
@@ -977,34 +1256,42 @@
       el.addEventListener(evt, h);
       onCleanup(el, function () { el.removeEventListener(evt, h); });
     });
-    root.querySelectorAll('[data-show]').forEach(function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-show]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (claimed(el, 'show')) return;
       var expr = el.getAttribute('data-show') || '';
-      var stop = effect(function () { el.hidden = !evalExpr(scope, expr); });
+      var stop = effect(function () { setHidden(el, !evalExpr(scope, expr)); });
       onCleanup(el, stop);
     });
-    Array.prototype.forEach.call(root.querySelectorAll('[data-if]'), function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-if]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (el.tagName === 'TEMPLATE') return;
       if (claimed(el, 'if')) return;
       var expr = el.getAttribute('data-if') || '';
-      var stop = effect(function () { el.hidden = !evalExpr(scope, expr); });
+      var stop = effect(function () { setHidden(el, !evalExpr(scope, expr)); });
       onCleanup(el, stop);
     });
-    Array.prototype.forEach.call(root.querySelectorAll('template[data-if]'), function (node) {
-      var tpl = /** @type {HTMLTemplateElement} */ (node);
+    eachEl(root, 'template[data-if]', function (node: any) {
+      var tpl = ((node) as HTMLTemplateElement);
       var expr = tpl.getAttribute('data-if') || '';
       if (claimed(tpl, 'tif')) return;
       var anchor = document.createComment('b-if');
       if (tpl.parentNode) tpl.parentNode.insertBefore(anchor, tpl);
-      /** @type {any} */ var frag = null;
+      var frag: any = null;
       var stop = effect(function () {
         var on = !!evalExpr(scope, expr);
         if (on && !frag) {
           frag = /** @type {DocumentFragment} */ (tpl.content.cloneNode(true));
           if (anchor.parentNode) anchor.parentNode.insertBefore(frag, anchor.nextSibling);
-          if (anchor.parentNode && anchor.parentNode instanceof Element) hydrate(anchor.parentNode, scope, actions);
+          if (anchor.parentNode && anchor.parentNode instanceof Element) {
+            hydrate(anchor.parentNode, scope, actions);
+            var nn = anchor.nextSibling;
+            while (nn && nn !== tpl) {
+              var nx2 = nn.nextSibling;
+              if (nn instanceof Element) playEnter(nn);
+              nn = nx2;
+            }
+          }
         } else if (!on && frag) {
           var n = anchor.nextSibling;
           while (n && n !== tpl) {
@@ -1019,8 +1306,8 @@
       });
       onCleanup(tpl, stop);
     });
-    Array.prototype.forEach.call(root.querySelectorAll('template[data-for]'), function (node) {
-      var tpl = /** @type {HTMLTemplateElement} */ (node);
+    eachEl(root, 'template[data-for]', function (node: any) {
+      var tpl = ((node) as HTMLTemplateElement);
       var spec = tpl.getAttribute('data-for') || '';
       if (claimed(tpl, 'tfor')) return;
       var mm = spec.match(/^\s*(\w+)(?:\s*,\s*(\w+))?\s+in\s+(.+)\s*$/);
@@ -1043,13 +1330,11 @@
           // data-key names a property of the item itself ("id"), with a
           // scope lookup fallback, then the index. Item-relative keys
           // keep rows stable across reorder; index keys only append.
-          /** @type {any} */
-          var key = i;
+          var key: any = i;
           if (keyExpr) {
             var ki = evalExpr(item, keyExpr);
             if (ki === undefined || ki === null) {
-              /** @type {Record<string, any>} */
-              var tmpVars = {};
+              var tmpVars: Record<string, any> = {};
               tmpVars[itemVar] = item;
               ki = evalExpr(childScope(scope, tmpVars), keyExpr);
             }
@@ -1059,8 +1344,7 @@
           order.push(key);
           var row = rows.get(key);
           if (!row) {
-            /** @type {Record<string, any>} */
-            var rsVars = {};
+            var rsVars: Record<string, any> = {};
             rsVars[itemVar] = item;
             if (idxVar) rsVars[idxVar] = i;
             var rs = childScope(scope, rsVars);
@@ -1071,6 +1355,7 @@
             holder.appendChild(f);
             parent.insertBefore(holder, anchor);
             hydrate(holder, rs, actions);
+            playEnter(holder);
             rows.set(key, { nodes: [holder], scope: rs });
           } else {
             // Same key, possibly new identity (replaced array) or new
@@ -1095,8 +1380,8 @@
         var chn = parent.childNodes;
         for (var q = 0; q < chn.length; q++) {
           var hn = chn[q];
-          if (hn.nodeType === 1 && /** @type {Element} */ (hn).hasAttribute('data-bkey')) {
-            seq.push(/** @type {Element} */ (hn).getAttribute('data-bkey'));
+          if (hn.nodeType === 1 && ((hn) as Element).hasAttribute('data-bkey')) {
+            seq.push(((hn) as Element).getAttribute('data-bkey'));
           }
         }
         var sameOrder = seq.length === order.length;
@@ -1108,12 +1393,12 @@
         if (!sameOrder) {
           for (var k = 0; k < order.length; k++) {
             var r2 = rows.get(order[k]);
-            if (r2) parent.insertBefore(/** @type {HTMLElement} */ (r2.nodes[0]), anchor);
+            if (r2) parent.insertBefore(((r2.nodes[0]) as HTMLElement), anchor);
           }
         }
-        rows.forEach(function (row2, kk) {
+        rows.forEach(function (row2: any, kk: any) {
           if (!seen.has(kk)) {
-            row2.nodes.forEach(function (nn) {
+            row2.nodes.forEach(function (nn: any) {
               if (nn instanceof Element) destroyTree(nn);
               if (nn.parentNode) nn.parentNode.removeChild(nn);
             });
@@ -1125,16 +1410,16 @@
       onCleanup(tpl, stop);
     });
     // actions: data-click + data-on:event(.prevent.stop.once)
-    root.querySelectorAll('[data-click]').forEach(function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-click]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (claimed(el, 'click')) return;
       var code = el.getAttribute('data-click') || '';
       var spec = el.getAttribute('data-trigger') || 'click';
       bindTrigger(el, spec, function () { execAction(scope, actions || {}, code); });
     });
-    Array.prototype.forEach.call(root.querySelectorAll('*'), function (node) {
-      var el = /** @type {HTMLElement} */ (node);
-      Array.prototype.forEach.call(el.attributes || [], function (/** @type {Attr} */ a) {
+    Array.prototype.forEach.call(allEls(root), function (node: any) {
+      var el = ((node) as HTMLElement);
+      Array.prototype.forEach.call(el.attributes || [], function (a: Attr) {
         if (a.name.indexOf('data-on:') === 0) {
           if (claimed(el, 'on:' + a.name)) return;
           var raw = a.name.slice('data-on:'.length);
@@ -1143,26 +1428,26 @@
           var mods = parts.slice(1);
           var code = a.value;
           var spec = el.getAttribute('data-trigger') || ev;
-          bindTrigger(el, spec, function (/** @type {Event} */ e) {
+          bindTrigger(el, spec, function (e: Event) {
             if (mods.indexOf('prevent') >= 0) e.preventDefault();
             if (mods.indexOf('stop') >= 0) e.stopPropagation();
             var s2 = childScope(scope, { $event: e });
             execAction(s2, actions || {}, code);
-            if (mods.indexOf('once') >= 0) { try { /** @type {any} */ (el).removeAttribute(a.name); } catch (err) {} }
+            if (mods.indexOf('once') >= 0) { try { ((el) as any).removeAttribute(a.name); } catch (err) {} }
           });
         }
       });
     });
     // data-init runs once as action
-    root.querySelectorAll('[data-init]').forEach(function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    eachEl(root, '[data-init]', function (node: any) {
+      var el = ((node) as HTMLElement);
       if (claimed(el, 'init')) return;
       var code = el.getAttribute('data-init') || '';
       try { execAction(scope, actions || {}, code); } catch (e) { reportError(e); }
     });
-    directives.forEach(function (fn, name) {
-      root.querySelectorAll('[data-' + name + ']').forEach(function (node) {
-        var el = /** @type {HTMLElement} */ (node);
+    directives.forEach(function (fn: any, name: any) {
+      eachEl(root, '[data-' + name + ']', function (node: any) {
+        var el = ((node) as HTMLElement);
         if (claimed(el, 'dir:' + name)) return;
         try {
           var out = fn({ el: el, get: function () { return evalExpr(scope, el.getAttribute('data-' + name) || ''); }, effect: effect, scope: scope });
@@ -1171,8 +1456,8 @@
       });
     });
     // fetch triggers: data-get/post/put/patch/delete
-    Array.prototype.forEach.call(root.querySelectorAll('*'), function (node) {
-      var el = /** @type {HTMLElement} */ (node);
+    Array.prototype.forEach.call(allEls(root), function (node: any) {
+      var el = ((node) as HTMLElement);
       var method = '';
       var url = '';
       if (el.hasAttribute('data-get')) { method = 'GET'; url = el.getAttribute('data-get') || ''; }
@@ -1190,22 +1475,27 @@
   /**
    * @param {HTMLElement} el @param {any} scope @param {string} method @param {string} url @param {Record<string, Function>} [actions]
    */
-  function setupFetch(el, scope, method, url, actions) {
+  function setupFetch(el: HTMLElement, scope: any, method: string, url: string, actions: Record<string, Function>) {
     var targetSel = el.getAttribute('data-target') || '';
     var swap = el.getAttribute('data-swap') || 'inner';
     var triggerSpec = el.getAttribute('data-trigger') || defaultEvent(el);
-    /** @type {any} */ (el)._bActions = actions || {};
+    ((el) as any)._bActions = actions || {};
     // Seed the shared error slot so bindings like data-bind="$error.status"
     // subscribe before the first request ever runs. Writes land on the
     // owning scope through setPath, never as a child shadow.
     var hasErr = false;
     try { hasErr = ('$error' in Object(scope)); } catch (e) {}
     if (!hasErr) setPath(scope, '$error', null);
-    var fire = function () { doFetch(el, scope, method, url, targetSel, swap); };
+    var fire = function (e: Event) {
+      // A declarative fetch owns its form: stop the native submit so
+      // the page never reloads under a data-post form.
+      if (el instanceof HTMLFormElement && e && e.type === 'submit' && e.cancelable) e.preventDefault();
+      doFetch(el, scope, method, url, targetSel, swap);
+    };
     bindTrigger(el, triggerSpec, fire);
   }
   /** @param {string} s @returns {any} */
-  function tryJSON(s) {
+  function tryJSON(s: string) {
     try { return JSON.parse(s); } catch (e) { return null; }
   }
   /**
@@ -1233,13 +1523,13 @@
    * @param {string} targetSel data-target selector, empty means the element.
    * @param {string} swap data-swap mode, see swapHtml.
    */
-  function doFetch(el, scope, method, url, targetSel, swap) {
+  function doFetch(el: HTMLElement, scope: any, method: string, url: string, targetSel: string, swap: string) {
     var m = parseTrigger(el.getAttribute('data-trigger') || defaultEvent(el), el);
-    var self = /** @type {any} */ (el);
+    var self = ((el) as any);
     if (!self._bReqs) self._bReqs = new Set();
     if (self._bN > 0 && (m.queue === 'first' || m.queue === 'none')) return;
     if (m.queue === 'last') {
-      self._bReqs.forEach(function (/** @type {any} */ c) { try { c.abort(); } catch (e) {} });
+      self._bReqs.forEach(function (c: any) { try { c.abort(); } catch (e) {} });
       self._bReqs.clear();
     }
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1247,7 +1537,7 @@
     self._bN = (self._bN || 0) + 1;
     var timedOut = false;
     var timeoutMs = parseMs(el.getAttribute('data-timeout') || '');
-    var timer = 0;
+    var timer: any = 0;
     if (timeoutMs > 0 && ctrl) {
       timer = /** @type {any} */ (setTimeout(function () {
         timedOut = true;
@@ -1255,7 +1545,7 @@
       }, timeoutMs));
     }
     var actions = self._bActions || {};
-    var setBusy = function (/** @type {boolean} */ on) {
+    var setBusy = function (on: boolean) {
       var indSel = el.getAttribute('data-indicator');
       var ind = indSel ? document.querySelector(indSel) : null;
       if (ind && ind instanceof HTMLElement) ind.hidden = !on ? true : false;
@@ -1268,16 +1558,16 @@
     setBusy(true);
     var before = new CustomEvent('laghu:before-request', { bubbles: true, cancelable: true, detail: { url: url, method: method } });
     if (!el.dispatchEvent(before)) { finish(); return; }
-    /** @type {any} */
-    var opts = { method: method, headers: { Accept: 'application/json, text/html' }, signal: ctrl ? ctrl.signal : undefined };
+    var opts: any = { method: method, headers: { Accept: 'application/json, text/html' }, signal: ctrl ? ctrl.signal : undefined };
     var valsRaw = el.getAttribute('data-vals');
     var body = null;
     if (valsRaw) {
-      var v = valsRaw.trim() === 'form' && el instanceof HTMLFormElement ? serializeForm(el) : (tryJSON(valsRaw) || {});
-      // merge form if inside one
-      var form = el instanceof HTMLFormElement ? el : (el.closest ? el.closest('form') : null);
-      if (form && valsRaw.trim() !== 'form') {
-        var fv = serializeForm(/** @type {HTMLFormElement} */ (form));
+      var wantForm = valsRaw.trim() === 'form';
+      var hostForm = el instanceof HTMLFormElement ? el : (el.closest ? el.closest('form') : null);
+      var v = wantForm ? (hostForm ? serializeForm(hostForm) : {}) : (tryJSON(valsRaw) || {});
+      // merge enclosing form for explicit JSON vals too
+      if (hostForm && !wantForm) {
+        var fv = serializeForm(((hostForm) as HTMLFormElement));
         for (var k in fv) v[k] = fv[k];
       }
       if (method === 'GET') {
@@ -1301,7 +1591,7 @@
       var f2 = el instanceof HTMLFormElement ? el : (el.closest ? el.closest('form') : null);
       if (f2) {
         opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(serializeForm(/** @type {HTMLFormElement} */ (f2)));
+        opts.body = JSON.stringify(serializeForm(((f2) as HTMLFormElement)));
       }
     }
     var hRaw = el.getAttribute('data-headers');
@@ -1318,7 +1608,7 @@
       self._bN = Math.max(0, (self._bN || 1) - 1);
       setBusy(false);
     }
-    fetch(url, opts).then(function (res) {
+    fetch(url, opts).then(function (res: any) {
       finish();
       el.dispatchEvent(new CustomEvent('laghu:after-request', { bubbles: true, detail: { status: res.status, url: url } }));
       if (!res.ok) {
@@ -1327,12 +1617,12 @@
         return;
       }
       var ct = (res.headers.get('content-type') || '').toLowerCase();
-      if (ct.indexOf('json') >= 0) return res.json().then(function (data) {
+      if (ct.indexOf('json') >= 0) return res.json().then(function (data: any) {
         setPath(scope, '$error', null);
         if (data && typeof data === 'object' && !Array.isArray(data)) Object.assign(scope, data);
         else setPath(scope, 'result', data);
       });
-      return res.text().then(function (html) {
+      return res.text().then(function (html: any) {
         var sel = el.getAttribute('data-select');
         if (sel) {
           var tmp = document.createElement('template');
@@ -1342,9 +1632,9 @@
         }
         var target = targetSel ? document.querySelector(targetSel) : el;
         if (!target) return;
-        swapHtml(/** @type {Element} */ (target), html, swap, scope, actions);
+        swapHtml(((target) as Element), html, swap, scope, actions);
       });
-    }).catch(function (err) {
+    }).catch(function (err: any) {
       finish();
       if (err && err.name === 'AbortError' && !timedOut) return;
       setPath(scope, '$error', { message: String((err && err.message) || err), timeout: timedOut });
@@ -1361,11 +1651,10 @@
    * @param {HTMLFormElement} form Form to read.
    * @returns {Record<string, any>} Name to value map.
    */
-  function serializeForm(form) {
-    /** @type {Record<string, any>} */
-    var out = {};
+  function serializeForm(form: HTMLFormElement) {
+    var out: Record<string, any> = {};
     var fd = new FormData(form);
-    fd.forEach(function (v, k) {
+    fd.forEach(function (v: any, k: any) {
       if (k in out) {
         if (!Array.isArray(out[k])) out[k] = [out[k]];
         out[k].push(typeof v === 'string' ? v : String(v));
@@ -1405,18 +1694,18 @@
    *   actions automatically; without them swapped-in data-click goes
    *   quiet with an unknown-action warning.
    */
-  function swapHtml(target, html, swap, scope, actions) {
+  function swapHtml(target: Element, html: string, swap: string, scope: any, actions: Record<string, Function>) {
     actions = actions || {};
     var s = String(swap || 'inner').toLowerCase();
     var s = String(swap || 'inner').toLowerCase();
     if (s === 'none') { target.dispatchEvent(new CustomEvent('laghu:after-swap', { bubbles: true, detail: { swap: s } })); return; }
-    var focusId = document.activeElement && /** @type {any} */ (document.activeElement).id ? /** @type {any} */ (document.activeElement).id : null;
-    var ae = /** @type {any} */ (document.activeElement);
+    var focusId = document.activeElement && ((document.activeElement) as any).id ? ((document.activeElement) as any).id : null;
+    var ae = ((document.activeElement) as any);
     var selStart = ae && typeof ae.selectionStart === 'number' ? ae.selectionStart : -1;
     var selEnd = ae && typeof ae.selectionEnd === 'number' ? ae.selectionEnd : -1;
     target.dispatchEvent(new CustomEvent('laghu:before-swap', { bubbles: true, cancelable: false, detail: { swap: s } }));
     var isMorph = s.indexOf('morph') === 0;
-    /** @type {any} */ var M = typeof window !== 'undefined' ? /** @type {any} */ (window).LaghuMorph : null;
+    var M: any = typeof window !== 'undefined' ? ((window) as any).LaghuMorph : null;
     if (isMorph) {
       if (M && M.morph) {
         M.morph(target, sanitize(html), { mode: s === 'morph:outer' ? 'outer' : 'inner' });
@@ -1437,9 +1726,8 @@
     tmp.innerHTML = sanitize(html);
     var frag = tmp.content;
     // preserve [data-preserve] nodes with same id: stash + restore
-    /** @type {Map<string, Element>} */
-    var kept = new Map();
-    target.querySelectorAll('[data-preserve][id]').forEach(function (n) { kept.set(n.id, /** @type {Element} */ (n)); });
+    var kept: Map<string, Element> = new Map();
+    target.querySelectorAll('[data-preserve][id]').forEach(function (n: any) { kept.set(n.id, ((n) as Element)); });
     destroyTree(target);
     if (s === 'inner') { target.innerHTML = ''; target.appendChild(frag); }
     else if (s === 'text') { target.textContent = tmp.content.textContent; }
@@ -1450,7 +1738,7 @@
     else if (s === 'afterend') { if (target.parentNode) target.parentNode.insertBefore(frag, target.nextSibling); }
     else { target.innerHTML = ''; target.appendChild(frag); }
     // restore preserved
-    kept.forEach(function (node, id) {
+    kept.forEach(function (node: any, id: any) {
       var sel = '#';
       try {
         var CE = (typeof CSS !== 'undefined' && CSS && CSS.escape) ? CSS.escape(id) : String(id).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
@@ -1478,13 +1766,13 @@
    * @param {number} a Caret start, -1 keeps the default.
    * @param {number} b Caret end, -1 keeps the default.
    */
-  function restoreFocus(id, a, b) {
+  function restoreFocus(id: string|null, a: number, b: number) {
     if (!id) return;
     var f = document.getElementById(id);
     if (f && f instanceof HTMLElement) {
       try { f.focus({ preventScroll: true }); } catch (e) { try { f.focus(); } catch (e2) {} }
       try {
-        if (a >= 0 && /** @type {any} */ (f).setSelectionRange) /** @type {any} */ (f).setSelectionRange(a, b);
+        if (a >= 0 && ((f) as any).setSelectionRange) ((f) as any).setSelectionRange(a, b);
       } catch (e) {}
     }
   }
@@ -1522,33 +1810,33 @@
    *   actions, observed names, and onMount per instance.
    * @returns {any} The registered custom element class.
    */
-  function define(tag, setup) {
+  function define(tag: string, setup: () => SetupResult) {
     if (!tag || tag.indexOf('-') < 0) throw new Error('[laghu] tag must contain hyphen: ' + tag);
     var probe = setup() || {};
-    var obs = probe.observed || Object.keys(probe.state || {}).filter(function (k) {
-      var v = /** @type {any} */ (probe.state)[k];
+    var obs = probe.observed || Object.keys(probe.state || {}).filter(function (k: any) {
+      var v = ((probe.state) as any)[k];
       return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
     });
-    var Klass = /** @type {any} */ (class extends HTMLElement {
+    var Klass: any = (class extends HTMLElement {
       connectedCallback() {
-        if (/** @type {any} */ (this)._bInit) return;
-        /** @type {any} */ (this)._bInit = true;
+        if (((this) as any)._bInit) return;
+        ((this) as any)._bInit = true;
         var r = setup() || {};
         var initial = r.state || {};
         // upgrade pre-defined props (set before define)
         for (var k in initial) {
           if (Object.prototype.hasOwnProperty.call(this, k)) {
-            try { initial[k] = /** @type {any} */ (this)[k]; delete /** @type {any} */ (this)[k]; } catch (e) {}
+            try { initial[k] = ((this) as any)[k]; delete ((this) as any)[k]; } catch (e) {}
           }
         }
         // pending attrs set before connect
-        var pend = /** @type {any} */ (this)._bPend;
+        var pend = ((this) as any)._bPend;
         if (pend) {
           for (var pk in pend) {
             if (pk in initial) initial[pk] = coerceAttr(pend[pk], initial[pk]);
             else initial[pk] = pend[pk];
           }
-          /** @type {any} */ (this)._bPend = null;
+          ((this) as any)._bPend = null;
         } else {
           for (var i = 0; i < obs.length; i++) {
             var an = obs[i];
@@ -1558,9 +1846,9 @@
           }
         }
         var state = reactive(initial);
-        /** @type {any} */ (this).state = state;
-        /** @type {any} */ (this).actions = r.actions || {};
-        if (typeof r.onUnmount === 'function') /** @type {any} */ (this)._bOnUnmount = r.onUnmount;
+        ((this) as any).state = state;
+        ((this) as any).actions = r.actions || {};
+        if (typeof r.onUnmount === 'function') ((this) as any)._bOnUnmount = r.onUnmount;
         hydrate(this, state, r.actions || {});
         try { if (typeof r.onMount === 'function') r.onMount.call(state); } catch (e) { reportError(e); }
         this.classList.add('is-defined');
@@ -1568,23 +1856,23 @@
       }
       disconnectedCallback() {
         try {
-          var st = /** @type {any} */ (this).state;
-          var un = /** @type {any} */ (this)._bOnUnmount;
+          var st = ((this) as any).state;
+          var un = ((this) as any)._bOnUnmount;
           if (typeof un === 'function' && st) un.call(st);
         } catch (e) { reportError(e); }
         destroyTree(this);
         this.dispatchEvent(new CustomEvent('laghu:unmount'));
-        /** @type {any} */ (this)._bInit = false;
+        ((this) as any)._bInit = false;
       }
       connectedMoveCallback() { /* preserve state on moveBefore */ }
-      attributeChangedCallback(/** @type {string} */ name, /** @type {string|null} */ old, /** @type {string|null} */ val) {
+      attributeChangedCallback(name: string, old: string | null, val: string | null) {
         if (old === val) return;
-        var st = /** @type {any} */ (this).state;
+        var st = ((this) as any).state;
         if (st && (name in st)) st[name] = coerceAttr(val, st[name]);
         else {
-          var p = /** @type {any} */ (this)._bPend || {};
+          var p = ((this) as any)._bPend || {};
           p[name] = val;
-          /** @type {any} */ (this)._bPend = p;
+          ((this) as any)._bPend = p;
         }
       }
     });
@@ -1592,28 +1880,28 @@
     customElements.define(tag, Klass);
     return Klass;
   }
-  /** @type {any} */ var observer = null;
+  var observer: any = null;
   function autoObserve() {
     if (observer || typeof MutationObserver === 'undefined') return;
-    observer = new MutationObserver(function (muts) {
+    observer = new MutationObserver(function (muts: any) {
       // Nodes moved within one batch appear in both added and removed.
       // Moving must preserve bindings, so only truly removed nodes die.
       var added = new Set();
-      muts.forEach(function (m) {
-        m.addedNodes.forEach(function (n) { if (n instanceof Element) added.add(n); });
+      muts.forEach(function (m: any) {
+        m.addedNodes.forEach(function (n: any) { if (n instanceof Element) added.add(n); });
       });
-      muts.forEach(function (m) {
-        m.addedNodes.forEach(function (n) {
+      muts.forEach(function (m: any) {
+        m.addedNodes.forEach(function (n: any) {
           if (n instanceof Element) {
-            if (n.hasAttribute && n.hasAttribute('data-scope') && !/** @type {any} */ (n)._bScope) {
+            if (n.hasAttribute && n.hasAttribute('data-scope') && !((n) as any)._bScope) {
               try {
-                var api2 = /** @type {any} */ (window).Laghu;
+                var api2 = ((window) as any).Laghu;
                 if (api2) api2.hydrate(n, parseScope(n.getAttribute('data-scope')), {});
               } catch (e) { reportError(e); }
             }
           }
         });
-        m.removedNodes.forEach(function (n) { if (n instanceof Element && !added.has(n)) destroyTree(n); });
+        m.removedNodes.forEach(function (n: any) { if (n instanceof Element && !added.has(n)) destroyTree(n); });
       });
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -1646,8 +1934,7 @@
    * - directive(name, fn): register data-name. fn receives
    *   { el, get, effect, scope } and may return a cleanup function.
    */
-  var api = {
-    version: VERSION,
+  var api = {    version: VERSION,
     define: define,
     reactive: reactive,
     effect: effect,
@@ -1657,15 +1944,15 @@
     parseTrigger: parseTrigger,
     swap: swapHtml,
     css: 'laghu:not(:defined),[data-laghu]:not(:defined){visibility:hidden}laghu.is-defined,[data-laghu].is-defined{visibility:visible}',
-    sanitize: function (/** @type {(html: string) => string} */ fn) { if (typeof fn === 'function') sanitize = fn; },
-    hydrate: function (/** @type {Element} */ root, /** @type {Record<string, any>} */ state, /** @type {Record<string, Function>} */ actions) {
+    sanitize: function (fn: (html: string) => string) { if (typeof fn === 'function') sanitize = fn; },
+    hydrate: function (root: Element, state: Record<string, any>, actions: Record<string, Function>) {
       var s = reactive(state || parseScope(root.getAttribute('data-scope')));
-      /** @type {any} */ (root)._bScope = s;
+      ((root) as any)._bScope = s;
       hydrate(root, s, actions || {});
       return s;
     },
     destroyTree: destroyTree,
-    store: function (/** @type {string} */ name, /** @type {any} */ init) {
+    store: function (name: string, init: any) {
       if (init !== undefined) { var s = reactive(init); stores.set(name, s); return s; }
       return stores.get(name);
     },
@@ -1677,7 +1964,7 @@
      * var doubled = Laghu.computed(function () { return state.count * 2; });
      * Laghu.effect(function () { el.textContent = doubled(); });
      */
-    computed: function (/** @type {Function} */ fn) {
+    computed: function (fn: Function) {
       var box = reactive({ v: undefined });
       effect(function () { box.v = fn(); });
       return function () { return box.v; };
@@ -1688,10 +1975,9 @@
      * @example
      * Laghu.watch(state, 'user.name', function (n, o) { console.log(o, 'becomes', n); });
      */
-    watch: function (/** @type {any} */ scope, /** @type {string} */ expr, /** @type {Function} */ cb) {
+    watch: function (scope: any, expr: string, cb: Function) {
       var started = false;
-      /** @type {any} */
-      var prev;
+      var prev: any;
       return effect(function () {
         var next = evalExpr(scope, expr);
         if (!started) { started = true; prev = next; return; }
@@ -1710,7 +1996,7 @@
      * Laghu.store('cart', { n: 0 });
      * Laghu.persist('cart', { key: 'cart:v1', version: 1 });
      */
-    persist: function (/** @type {string} */ name, /** @type {{key?: string, version?: number, debounce?: number}} */ opts) {
+    persist: function (name: string, opts: {key?: string, version?: number, debounce?: number}) {
       opts = opts || {};
       var key = opts.key || ('laghu:' + name);
       var ver = opts.version === undefined ? 1 : opts.version;
@@ -1726,7 +2012,7 @@
           }
         }
       } catch (e) { reportError(e); }
-      var timer = 0;
+      var timer: any = 0;
       effect(function () {
         JSON.stringify(st);
         if (typeof localStorage === 'undefined') return;
@@ -1738,18 +2024,19 @@
       });
       return st;
     },
-    directive: function (/** @type {string} */ name, /** @type {Function} */ fn) { directives.set(name, fn); }
+    directive: function (name: string, fn: Function) { directives.set(name, fn); },
+    filter: function (name: string, fn: Function) { filters.set(name, fn); },
+    scope: function (parent: any, vars: Record<string, any>) { return childScope(parent, vars || {}); }
   };
-  // @ts-ignore
-  window.Laghu = api;
   if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', function () {
       autoObserve();
-      document.querySelectorAll('[data-scope]').forEach(function (n) {
-        var el = /** @type {Element} */ (n);
-        if (/** @type {any} */ (el)._bScope) return;
+      document.querySelectorAll('[data-scope]').forEach(function (n: any) {
+        var el = ((n) as Element);
+        if (((el) as any)._bScope) return;
         api.hydrate(el, parseScope(el.getAttribute('data-scope')), {});
       });
     });
   }
+  return api;
 })();

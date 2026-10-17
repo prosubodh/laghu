@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>laghu.js - declarative router</title>
+<nav>
+  <a href="#/">home</a>
+  <a href="#/user/42">user 42</a>
+  <a href="#/vip">vip (guarded)</a>
+  <a href="#/missing">missing</a>
+  <button id="toggle">toggle admin</button>
+  <span>admin: <span data-bind="isAdmin"></span></span>
+</nav>
+<div id="view">
+  <template data-route="/">
+    <h1>Home</h1>
+    <p>counter: <span data-bind="n"></span> <button data-click="inc">add</button></p>
+  </template>
+  <template data-route="/user/:id">
+    <h1>User <span data-bind="params.id"></span></h1>
+    <p>counter survives navigation: <span data-bind="n"></span></p>
+  </template>
+  <template data-route="/vip" data-route-if="isAdmin">
+    <h1>VIP room</h1>
+  </template>
+  <template data-route-notfound>
+    <h1>Nothing here</h1>
+  </template>
+</div>
+<script src="../dist/laghu.min.js"></script>
+<script src="../dist/router.min.js"></script>
+<script>
+  var s = Laghu.reactive({ n: 0, isAdmin: false });
+  Laghu.hydrate(document.querySelector('nav'), s, {});
+  // nav markup lives outside #view; the toggle is plain wiring
+  document.querySelector('#toggle').addEventListener('click', function () {
+    s.isAdmin = !s.isAdmin;
+  });
+  LaghuRouter.route({ target: '#view', scope: s, actions: {
+    inc: function () { s.n++; }
+  }});
+</script>

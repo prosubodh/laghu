@@ -32,15 +32,26 @@
   },
   "homepage": "https://github.com/prosubodh/laghu#readme",
   "scripts": {
-    "check": "tsc --noEmit -p jsconfig.json",
-    "test": "node test/run.mjs && node test/examples.mjs && node test/apps.mjs && node test/router.mjs",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/size.mjs",
+    "test": "vitest run",
     "size": "node scripts/size.mjs",
-    "prepublishOnly": "npm run check && npm run test && npm run size"
+    "prepublishOnly": "npm run check && npm run test && npm run build",
+    "prepare": "vp config"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.4",
     "esbuild": "^0.28.2",
-    "jsdom": "^25.0.0",
+    "happy-dom": "^21.0.3",
+    "playwright": "^1.64.1",
     "terser": "^5.51.2",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vite-plus": "1.2.0",
+    "vitest": "5.0.4"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
+    "vitest": "5.0.4"
   }
 }

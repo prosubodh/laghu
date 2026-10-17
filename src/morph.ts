@@ -25,7 +25,19 @@
  *   <li id="r1">one</li>
  * </ul>
  */
-(function () {
+export interface LaghuMorphAPI {
+  morph(target: Element, html: string, opts?: { mode?: string }): void;
+  morphEl(a: Element, b: Element): void;
+  version: string;
+}
+
+declare global {
+  interface Window {
+    LaghuMorph?: LaghuMorphAPI;
+  }
+}
+
+export const LaghuMorph: LaghuMorphAPI = (() => {
   'use strict';
   /**
    * Copy attributes from the new node onto the live node, remove stale
@@ -36,7 +48,7 @@
    * @param {Element} a Live node in the document, updated in place.
    * @param {Element} b Fresh node parsed from the response, read only.
    */
-  function syncAttrs(a, b) {
+  function syncAttrs(a: Element, b: Element) {
     var bn = b.attributes;
     var an = a.attributes;
     var keep = new Set();
@@ -49,13 +61,13 @@
     for (var j = 0; j < an.length; j++) {
       if (!keep.has(an[j].name)) rm.push(an[j].name);
     }
-    rm.forEach(function (n) { a.removeAttribute(n); });
+    rm.forEach(function (n: any) { a.removeAttribute(n); });
     if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement || a instanceof HTMLSelectElement) {
-      var bv = /** @type {any} */ (b).value;
-      if (bv !== undefined && /** @type {any} */ (a).value !== bv && document.activeElement !== a) {
-        /** @type {any} */ (a).value = bv;
+      var bv = ((b) as any).value;
+      if (bv !== undefined && ((a) as any).value !== bv && document.activeElement !== a) {
+        ((a) as any).value = bv;
       }
-      if (/** @type {any} */ (b).checked !== undefined) /** @type {any} */ (a).checked = /** @type {any} */ (b).checked;
+      if (((b) as any).checked !== undefined) ((a) as any).checked = ((b) as any).checked;
     }
   }
   /**
@@ -66,7 +78,7 @@
    * @param {Element} el Element to identify.
    * @returns {string|null} Key, or null when the element has none.
    */
-  function keyOf(el) {
+  function keyOf(el: Element) {
     if (el.id) return '#' + el.id;
     var k = el.getAttribute && el.getAttribute('data-bkey');
     if (k) return 'k:' + k;
@@ -82,7 +94,7 @@
    * @param {Element} oldEl Live element, updated in place.
    * @param {Element} newEl Fresh element describing the target state.
    */
-  function morphEl(oldEl, newEl) {
+  function morphEl(oldEl: Element, newEl: Element) {
     if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute('data-morph-skip')) return;
     if (oldEl.tagName !== newEl.tagName) {
       oldEl.replaceWith(newEl.cloneNode(true));
@@ -90,17 +102,15 @@
     }
     syncAttrs(oldEl, newEl);
     // reconcile children by key, then positionally
-    /** @type {Map<string, Element>} */
-    var oldByKey = new Map();
-    Array.prototype.forEach.call(oldEl.children, function (/** @type {Element} */ c) {
+    var oldByKey: Map<string, Element> = new Map();
+    Array.prototype.forEach.call(oldEl.children, function (c: Element) {
       var k = keyOf(c);
       if (k && !oldByKey.has(k)) oldByKey.set(k, c);
     });
     var newKids = Array.prototype.slice.call(newEl.childNodes);
     var used = new Set();
-    /** @type {Node[]} */
-    var out = [];
-    newKids.forEach(function (/** @type {Node} */ nk) {
+    var out: Node[] = [];
+    newKids.forEach(function (nk: Node) {
       if (nk.nodeType === 3) {
         if (nk.textContent !== null && nk.textContent.trim() !== '') {
           var t = document.createTextNode(nk.textContent);
@@ -109,7 +119,7 @@
         return;
       }
       if (!(nk instanceof Element)) {
-        out.push(/** @type {Element} */ (nk).cloneNode(true));
+        out.push(((nk) as Element).cloneNode(true));
         return;
       }
       var k = keyOf(nk);
@@ -136,11 +146,11 @@
       }
     });
     // remove stale (except data-preserve handled by core)
-    Array.prototype.forEach.call(Array.prototype.slice.call(oldEl.childNodes), function (/** @type {Node} */ c) {
+    Array.prototype.forEach.call(Array.prototype.slice.call(oldEl.childNodes), function (c: Node) {
       if (c instanceof Element) {
         if (!used.has(c) && oldEl.contains(c)) {
           try {
-            var B = /** @type {any} */ (window).Laghu;
+            var B = ((window) as any).Laghu;
             if (B && B.destroyTree) B.destroyTree(c);
           } catch (e) {}
           oldEl.removeChild(c);
@@ -149,7 +159,7 @@
         oldEl.removeChild(c);
       }
     });
-    out.forEach(function (n) { oldEl.appendChild(n); });
+    out.forEach(function (n: any) { oldEl.appendChild(n); });
   }
   /**
    * Morph a target from an HTML string. Mode "inner" (default) reconciles
@@ -165,7 +175,7 @@
    * @param {string} html Response HTML.
    * @param {{mode?: string}} [opts] Optional mode, "inner" or "outer".
    */
-  function morph(target, html, opts) {
+  function morph(target: Element, html: string, opts: any) {
     var mode = (opts && opts.mode) || 'inner';
     var tmp = document.createElement('template');
     tmp.innerHTML = html;
@@ -179,10 +189,9 @@
     wrap.appendChild(tmp.content.cloneNode(true));
     // morph target against wrapper: wrap children = new children
     var fake = document.createElement(target.tagName);
-    Array.prototype.forEach.call(wrap.childNodes, function (/** @type {Node} */ n) { fake.appendChild(n.cloneNode(true)); });
+    Array.prototype.forEach.call(wrap.childNodes, function (n: Node) { fake.appendChild(n.cloneNode(true)); });
     morphEl(target, fake);
   }
-  var api = { morph: morph, morphEl: morphEl, version: '1.0.0' };
-  // @ts-ignore
-  window.LaghuMorph = api;
+  var api: LaghuMorphAPI = { morph: morph, morphEl: morphEl, version: '1.0.0' };
+  return api;
 })();

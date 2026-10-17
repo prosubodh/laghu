@@ -1,133 +1,111 @@
-// laghu.js type definitions (hand-written, mirrors the JSDoc in src).
-// Import in TypeScript projects for autocomplete and checking:
-//   import type { LaghuAPI } from './laghu.d.ts';
-
-/** Return value of the setup factory passed to Laghu.define. */
+/**
+ * laghu core - zero-build IIFE micro-framework.
+ *
+ * What this module provides:
+ * - Proxy based reactivity with per-binding effects (no Virtual DOM).
+ * - Hydrate-in-place HTML bindings plus template based if/for lists.
+ * - Two-way form bindings, declarative fetch with HTML or JSON swaps.
+ * - Light-DOM Web Components with attribute to state sync.
+ * - Strict CSP compliance: no new Function, no eval, no inline handlers.
+ *
+ * Consumed without a compiler: the build bundles this module to a
+ * plain-JS IIFE (`dist/laghu.js`, minified to `dist/laghu.min.js`)
+ * usable from a script tag or `file://`.
+ *
+ *   <script src="laghu.min.js"></script>
+ *   <script>Laghu.define('my-tag', () => ({ state: { n: 0 } }));</script>
+ */
 export interface SetupResult {
-  /** Fresh state per component instance. Primitives sync from attributes. */
-  state?: Record<string, any>;
-  /** Named methods callable from data-click and data-on. Run with state as this. */
-  actions?: Record<string, (...args: any[]) => void>;
-  /** Attribute names synced into state. Defaults to primitive state keys. */
-  observed?: string[];
-  /** Runs once after the element hydrates. `this` is the state. */
-  onMount?: (this: any) => void;
-  /** Reserved for pairing with onMount in user code. */
-  onUnmount?: (this: any) => void;
+    /** Initial state for one component instance. */
+    state?: Record<string, any>;
+    /** Methods callable from data-click and data-on. */
+    actions?: Record<string, (...args: any[]) => void>;
+    /** Attribute names synced into state. Defaults to primitive state keys. */
+    observed?: string[];
+    /** Runs once after the element is hydrated. */
+    onMount?: (this: any) => void;
+    /** Runs on disconnect. Reserved pairing for onMount. */
+    onUnmount?: (this: any) => void;
 }
-
-/** Parsed form of a data-trigger string. See parseTrigger docs in src. */
 export interface TriggerSpec {
-  on: string;
-  delay: number;
-  throttle: number;
-  once: boolean;
-  changed: boolean;
-  queue: string;
-  from: string;
-  every: number;
-  load: boolean;
-  revealed: boolean;
+    on: string;
+    delay: number;
+    throttle: number;
+    once: boolean;
+    changed: boolean;
+    queue: string;
+    from: string;
+    every: number;
+    load: boolean;
+    revealed: boolean;
 }
-
-/** Context object passed to custom directive functions. */
 export interface DirectiveContext {
-  /** Element carrying the data-name attribute. */
-  el: HTMLElement;
-  /** Read the attribute expression against the current scope. */
-  get(): any;
-  /** Create a reactive effect. Return its stop function for cleanup. */
-  effect(f: () => void): () => void;
-  /** Reactive state of the enclosing scope. */
-  scope: any;
+    el: HTMLElement;
+    get(): any;
+    effect(f: () => void): () => void;
+    scope: any;
 }
-
-/** Full public surface available as window.Laghu. */
 export interface LaghuAPI {
-  /** Release string, for example "1.1.0". */
-  version: string;
-  /**
-   * Register a Light-DOM custom element.
-   * @param tag Element name, must contain a hyphen.
-   * @param setup Factory returning fresh state, actions, and options.
-   */
-  define(tag: string, setup: () => SetupResult): any;
-  /** Make a plain object or array reactive. Primitives pass through. Re-wraps return the same proxy. */
-  reactive<T extends object>(obj: T): T;
-  /**
-   * Run fn now and again on dependency change. Subscriptions refresh
-   * per run; stop() unsubscribes fully. Never throws out.
-   * @returns Stop function that unsubscribes the effect.
-   */
-  effect(fn: () => void): () => void;
-  /** Evaluate a CSP-safe expression: paths, indexes, literals, arithmetic, comparisons, ternary, calls. */
-  eval(scope: any, expr: string): any;
-  /** Read a dotted path (or $store.name.key) without throwing. Prototype segments blocked. */
-  get(scope: any, path: string): any;
-  /** Write a dotted path, creating intermediate objects. Prototype segments refused. */
-  set(scope: any, path: string, val: any): void;
-  /** Parse data-trigger text into a TriggerSpec. */
-  parseTrigger(spec: string, el: Element): TriggerSpec;
-  /**
-   * Swap HTML into target, hydrate the result, preserve focus.
-   * @param swap One of inner, outer, text, append, prepend, beforebegin,
-   * afterend, delete, none, morph:inner, morph:outer.
-   * @param actions Named actions for handlers in the new content.
-   */
-  swap(target: Element, html: string, swap: string, scope: any, actions?: Record<string, Function>): void;
-  /** FOUC guard CSS string. Inject it or copy the rule. */
-  css: string;
-  /** Replace the HTML pass-through used by data-html and swaps. Defaults to a baseline sanitizer. */
-  sanitize(fn: (html: string) => string): void;
-  /**
-   * Scan root, wire all bindings, return the reactive state.
-   * Runs automatically for [data-scope] islands on page load.
-   */
-  hydrate(root: Element, state?: Record<string, any>, actions?: Record<string, Function>): any;
-  /** Stop all bindings under root: effects, listeners, timers, fetches. */
-  destroyTree(root: Element): void;
-  /** Create (with init) or fetch (without) a named global reactive store. */
-  store(name: string, init?: any): any;
-  /** Derived value kept fresh; call the getter inside bindings or effects to subscribe. */
-  computed(fn: () => any): () => any;
-  /** Call back with (next, prev) when an expression's value changes. Returns the stop function. */
-  watch(scope: any, expr: string, cb: (next: any, prev: any) => void): () => void;
-  /** Persist a named store to localStorage (debounced) with versioned restore. */
-  persist(name: string, opts?: { key?: string; version?: number; debounce?: number }): any;
-  /**
-   * Register a data-name directive. Return a cleanup function optionally.
-   * @example
-   * Laghu.directive('focus', function (ctx) {
-   *   return ctx.effect(function () { if (ctx.get()) ctx.el.focus(); });
-   * });
-   */
-  directive(name: string, fn: (ctx: DirectiveContext) => void | (() => void)): void;
+    version: string;
+    define(tag: string, setup: () => SetupResult): any;
+    reactive<T extends object>(obj: T): T;
+    effect(fn: () => void): () => void;
+    eval(scope: any, expr: string): any;
+    get(scope: any, path: string): any;
+    set(scope: any, path: string, val: any): void;
+    parseTrigger(spec: string, el: Element): TriggerSpec;
+    swap(target: Element, html: string, swap: string, scope: any, actions?: Record<string, Function>): void;
+    css: string;
+    sanitize(fn: (html: string) => string): void;
+    hydrate(root: Element, state?: Record<string, any>, actions?: Record<string, Function>): any;
+    destroyTree(root: Element): void;
+    store(name: string, init?: any): any;
+    computed(fn: () => any): () => any;
+    watch(scope: any, expr: string, cb: (next: any, prev: any) => void): () => void;
+    persist(name: string, opts?: {
+        key?: string;
+        version?: number;
+        debounce?: number;
+    }): any;
+    directive(name: string, fn: (ctx: DirectiveContext) => void | (() => void)): void;
+    /**
+     * Register a display filter for data-bind pipes:
+     * data-bind="price | currency". Unknown names warn and pass through.
+     */
+    filter(name: string, fn: (value: any, arg: string, scope: any) => any): void;
+    /**
+     * Make a child scope owning vars over a parent. Needed by custom
+     * renderers (router templates, hand-rolled lists): plain assignment
+     * on a Proxy-prototyped object would write the parent instead.
+     */
+    scope(parent: any, vars: Record<string, any>): any;
 }
-
 declare global {
-  interface Window {
-    Laghu: LaghuAPI;
-    LaghuMorph?: {
-      morph(target: Element, html: string, opts?: { mode?: string }): void;
-      morphEl(a: Element, b: Element): void;
-      version: string;
-    };
-    LaghuRouter?: {
-      route(opts: {
-        target?: string;
-        scope?: any;
-        actions?: Record<string, Function>;
-        routes?: Array<{ path: string; render: (params: Record<string, string>, to: any) => string }>;
-        notfound?: (to: any) => string;
-        beforeEach?: (to: any, from: any) => boolean | void;
-        afterEach?: (to: any, from: any) => void;
-      }): () => void;
-      compile(pattern: string): (path: string) => Record<string, string> | null;
-      current(): { path: string; params: Record<string, string> };
-      navigate(path: string): void;
-      afterEach(fn: (to: any, from: any) => void): void;
-      version: string;
-    };
-    __LAGHU_DEV__?: boolean;
-  }
+    interface Window {
+        Laghu: LaghuAPI;
+        __LAGHU_DEV__?: boolean;
+    }
+    interface Element {
+        _bcu?: Array<Function>;
+        _bH?: Record<string, number>;
+        _bReq?: any;
+        _bReqs?: Set<any>;
+        _bN?: number;
+        _bScope?: any;
+        _bActions?: Record<string, Function>;
+        _bInit?: boolean;
+        _bPend?: Record<string, string | null> | null;
+        _bOnUnmount?: Function;
+    }
+    interface HTMLElement {
+        _bcu?: Array<Function>;
+        _bH?: Record<string, number>;
+        _bT?: number;
+        _bHide?: boolean;
+        _bVal?: boolean;
+        _bValForm?: boolean;
+        _bTried?: boolean;
+        _bTouched?: boolean;
+    }
 }
+export declare const Laghu: LaghuAPI;

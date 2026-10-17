@@ -6,6 +6,22 @@ major for breaking changes.
 
 ## [Unreleased]
 
+Declarative push:
+
+- Display filters: `data-bind="price | currency"` with nine
+  built-ins plus `Laghu.filter` for custom ones. `||` stays
+  logical-or.
+- Declarative router templates: `template[data-route]`,
+  `data-route-if` guards, `template[data-route-notfound]`,
+  params bound as `params` in a child scope.
+- `Laghu.scope` for custom renderers needing child scopes.
+- Automatic triggers (every, load, revealed) combine with the
+  event listener: `data-trigger="load"` loads on ready and still
+  reloads on click.
+- Forms owning a declarative fetch stop their native submit.
+- First application of a toggle is instant (no opening animation
+  on initial render); reduced-motion handling unchanged.
+
 ## [1.1.0]
 
 Security baseline (breaking only for attack patterns):

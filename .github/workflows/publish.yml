@@ -45,9 +45,10 @@ jobs:
 
       # dist/ is committed for file:// and CDN use, so rebuild it here and
       # prove it matches the sources instead of trusting a stale build.
+      # build = tsc declarations + esbuild bundles + terser min + budgets.
       - name: Rebuild dist and verify it matches the commit
         run: |
-          npm run size
+          npm run build
           git diff --exit-code dist/
 
       - name: Run Type Checks
@@ -83,8 +84,9 @@ jobs:
             const files = new Set(meta.files.map((f) => f.path));
             const required = [
               "package.json", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md",
-              "dist/laghu.min.js", "dist/morph.min.js", "dist/router.min.js", "dist/laghu.d.ts",
-              "src/laghu.js", "src/morph.js", "src/router.js"
+              "dist/laghu.min.js", "dist/morph.min.js", "dist/router.min.js", "dist/validate.min.js", "dist/laghu.d.ts",
+              "dist/morph.d.ts", "dist/router.d.ts", "dist/validate.d.ts",
+              "src/laghu.ts", "src/morph.ts", "src/router.ts", "src/validate.ts"
             ];
             const missing = required.filter((f) => !files.has(f));
             if (missing.length) {

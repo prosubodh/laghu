@@ -174,11 +174,20 @@ state.count = 5; // bound nodes update shortly after
 
 One-way text binding. Same behavior, two spellings. Sets
 `textContent`, so values are never parsed as HTML (safe by default).
+Append `| filter[:arg]` pipes for display formatting; `||` stays
+logical-or.
 
 ```html
 <span data-bind="user.name"></span>
 <span data-text="count"></span>
+<span data-bind="price | currency"></span>
+<span data-bind="nick | default:'anon'"></span>
 ```
+
+Built-in filters: `uppercase`, `lowercase`, `json`, `fixed`,
+`currency`, `date`, `default`, `join`, `length`. Register more
+with `Laghu.filter(name, fn)`; unknown names warn in development
+and pass the value through.
 
 ### data-html
 
@@ -407,6 +416,24 @@ renders, params decode automatically, guards cancel by returning
 false, and rendered fragments hydrate with the scope and actions
 you pass in.
 
+Declarative alternative: skip render functions and write routes as
+templates inside the target. Params bind into a child scope as
+`params`, guards are plain expressions, and templates are
+harvested once at setup so swaps never destroy them:
+
+```html
+<div id="view">
+  <template data-route="/"><h1>Home</h1></template>
+  <template data-route="/user/:id" data-route-if="isAdmin">
+    <h1>User <span data-bind="params.id"></span></h1>
+  </template>
+  <template data-route-notfound><h1>Missing</h1></template>
+</div>
+<script>
+  LaghuRouter.route({ target: '#view', scope: state });
+</script>
+```
+
 ### data-trigger
 
 Controls when clicks and fetches fire. Grammar (any order, first bare
@@ -436,6 +463,10 @@ Modifiers:
 - `load`: fire once the document is ready.
 - `revealed`: fire when scrolled into view (needs
   IntersectionObserver, fires at once without it).
+
+Automatic firings combine with the event listener:
+`data-trigger="load"` on a button loads on ready and still reloads
+on click.
 
 Default event by tag: forms use `submit`, inputs, selects, and
 textareas use `change`, everything else uses `click`.
@@ -518,10 +549,11 @@ dotted paths, bracket indexes (`list[0]`, `map["k"]`), literals,
 `||`, ternary (`a ? b : c`), parenthesized groups, and calls with
 evaluated arguments like `total(qty)`. Anything else is undefined.
 
-State keys must be valid identifiers (camelCase): a hyphen means
-subtraction inside expressions. Action names are exempt; exact
-action lookup runs before expression parsing, so
-`data-click="my-action"` stays literal.
+State keys may use kebab-case: a whole string that resolves as a
+path wins over operators, so `$store.t-read.n` reads literally when
+the key exists. Pure arithmetic like `count-1` still subtracts.
+Action names are exempt: exact action lookup runs before
+expression parsing, so `data-click="my-action"` stays literal.
 
 ### Laghu.get(scope, path) and Laghu.set(scope, path, val)
 
@@ -555,7 +587,29 @@ when rendering untrusted HTML:
 Laghu.sanitize(function (h) { return DOMPurify.sanitize(h); });
 ```
 
-### Laghu.store(name, init)
+### Laghu.filter(name, fn) and display pipes
+
+`data-bind` and `data-text` accept `expr | filter[:arg]`
+chains. Double pipes stay logical-or. Nine filters ship built in
+(`uppercase`, `lowercase`, `json`, `fixed`, `currency`, `date`,
+`default`, `join`, `length`); register more with `Laghu.filter`,
+which unknown names warn about and pass through.
+
+```html
+<span data-bind="price | currency"></span>
+<span data-bind="nick | default:'anon'"></span>
+<span data-bind="tags | join:', '"></span>
+```
+
+```js
+Laghu.filter('shout', function (v) { return String(v) + '!'; });
+```
+
+### Laghu.scope(parent, vars)
+
+Makes a child scope owning `vars` over `parent`. Needed by custom
+renderers (router templates use it for `params`): plain assignment
+on a Proxy-prototyped object would write the parent instead.
 
 Creates or fetches a named global reactive store. Read it in any
 binding as `$store.cart.n`.
@@ -725,16 +779,19 @@ for one-shot content where replacement is cheaper and simpler.
 
 laghu ships type checking with zero build output. Every source file
 starts with `// @ts-check`, and editors run the TypeScript language
-server on plain `.js` files. JSDoc comments carry the types.
+server on plain `.ts` sources. JSDoc examples plus real type
+annotations carry the types, and `dist/*.d.ts` is generated from
+source on every build, never hand-edited.
 
 To check the whole project:
 
 ```sh
-npx tsc --noEmit -p jsconfig.json
+npx tsc --noEmit -p tsconfig.json
 ```
 
-This typechecks only and emits nothing. The browser runs the same
-`.js` files untouched.
+This typechecks only and emits nothing. `npm run build` typechecks,
+emits declarations, and bundles `dist/` (plain-JS IIFE plus min).
+Implementers still load `dist/*.min.js` with no compiler involved.
 
 One blind spot: HTML attribute strings are invisible to the
 checker. Renaming `increment` to `add` breaks
@@ -799,12 +856,19 @@ never run.
 
 Measured after minification:
 
-- Core `dist/laghu.min.js`: about 27.5kB raw, 9.2kB gzip, 8.2kB brotli.
+- Core `dist/laghu.min.js`: about 30.6kB raw, 10.3kB gzip, 9.2kB brotli.
 - Morph `dist/morph.min.js`: about 2.3kB raw, 1kB gzip.
-- Router `dist/router.min.js`: about 1.7kB raw, 0.9kB gzip.
+- Router `dist/router.min.js`: about 2.4kB raw, 1.1kB gzip.
+- Validate `dist/validate.min.js`: about 3.3kB raw, 1.3kB gzip.
 - Budgets enforced by `node scripts/size.mjs`: core at or under
-  10kB gzip, morph at or under 3kB gzip, router at or under
-  2.5kB gzip.
+  10.5kB gzip, morph at or under 3kB gzip, router at or under
+  2.5kB gzip, validate at or under 2kB gzip.
+
+The core grew from 7.1kB across three recorded moves: the security
+baseline, the expression grammar, and the declarative push
+(filters, scope API, trigger combining, transition baseline).
+Each move is logged in `scripts/size.mjs` with its cause; the
+total stays roughly a third of htmx alone (~16kB gzip).
 
 The core grew from 7.1kB to 9.2kB for two consensus items: the
 security baseline (default sanitizer, URL policy, pollution
@@ -843,28 +907,33 @@ See the `examples/` folder. Each file opens directly from disk.
   template removal running directive cleanup, class binding.
 - `fetch.html`: JSON button plus morph list swap (needs a server
   for the URLs, or swap in local JSON files).
+- `api.html`: third-party APIs with zero backend of your own
+  (GitHub repo card and contributors plus JSONPlaceholder posts).
+- `validate.html`: declarative signup validation with submit guard.
+- `transitions.html`: enter and leave motion with reduced-motion
+  respect.
 
-`test/examples.mjs` boots every file above and drives it: 48
-assertions, all passing alongside the suites below.
+`test/unit/` covers every behavior above against `src/` with
+Vitest: 104 tests green in about 2 seconds. Examples stay
+documentation; they are not test fixtures.
 
 ## 15. Checking your setup
 
 ```sh
 npm install
-npx tsc --noEmit -p jsconfig.json
-node scripts/size.mjs
+npx tsc --noEmit -p tsconfig.json
+npm run build
 node scripts/sri.mjs
 npm test
 ```
 
-154 tests cover (71 in `test/run.mjs` plus 48 in
-`test/examples.mjs`, 23 in `test/apps.mjs`, 12 in
-`test/router.mjs`): counter increments, text and attribute
-bindings, conditionals, keyed reorder reuse, two-way inputs,
-attribute sync, triggers, JSON merge, all swap modes, morph focus
-preservation, stores, directives with cleanup, unknown-action
-warnings, every shipped example page driven end to end, both demo
-apps played to completion, and the router contract.
+104 Vitest tests cover (`test/unit/`, happy-dom, ~2s): reactivity,
+effects, and cleanup; the full expression grammar; paths with
+prototype guards; triggers; stores and persist; all bindings,
+conditionals, keyed lists, two-way inputs, and directives;
+attribute sync and component lifecycles; every fetch mode, swap,
+and morph behavior; validation, transitions, and the hash router;
+third-party API flows; and both demo apps played to completion.
 
 Releasing a new version (publishes to npm through CI):
 
@@ -918,33 +987,42 @@ complete.
 
 ## 17. Project files
 
-- `src/laghu.js`: core source with full JSDoc, loaded directly in
-  development.
-- `src/morph.js`: opt-in morph plugin source with full JSDoc.
-- `src/router.js`: opt-in hash router plugin with full JSDoc.
-- `dist/laghu.min.js`, `dist/morph.min.js`, `dist/router.min.js`:
-  minified builds.
-- `dist/laghu.d.ts`: TypeScript declarations for consumers.
-- `test/run.mjs`: jsdom suite, 71 assertions including security
-  regressions.
-- `test/examples.mjs`: boots every example page and drives it, 48 assertions.
-- `test/apps.mjs`: plays both demo apps to completion, 23 assertions.
-- `test/router.mjs`: router contract, 12 assertions.
-- `scripts/size.mjs`: minifies and enforces gzip budgets.
+- `src/laghu.ts`: core source (TypeScript, strict). Never loaded
+  directly; bundled to `dist/` by `npm run build`.
+- `src/morph.ts`, `src/router.ts`, `src/validate.ts`: opt-in
+  plugins, same pipeline.
+- `src/*.global.ts`: one-line entries assigning each bundle to its
+  `window` global for the IIFE builds.
+- `dist/laghu.js` plus `.min.js` (and morph, router, validate):
+  plain-JS bundles. What tests prove and what ships.
+- `dist/*.d.ts`: declarations generated from source on every
+  build, never hand-edited.
+- `tsconfig.json`: strict check used by editors and CI.
+- `tsconfig.build.json`: declaration emit for `dist`.
+- `test/unit/`: Vitest suites against `src/` (reactivity, expr,
+  dom, fetch, components, security, router, validate, transitions,
+  apps, dist load check).
+- `test/setup.ts`: shared happy-dom setup and window globals.
+- `scripts/size.mjs`: bundles, minifies, and enforces gzip budgets.
 - `scripts/sri.mjs`: prints SRI hashes for release notes.
-- `examples/`: nine pages opening from disk.
+- `examples/`: twelve pages opening from disk.
 - `apps/`: full demo projects with the prescribed structure.
 - `bench/`: five-way benchmark harness and results.
 - `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`: release,
   security, and contribution contracts.
-- `jsconfig.json`: strict `checkJs` config used by editors and CI.
+- `memory.md`: decision ledger (ADRs newest-first).
 
 ## 18. Roadmap (explicit non-goals included)
 
-Next, in order: declarative validation (`data-validate` with
-schemas), transitions (`data-transition`), async fallback templates
-for fetch, icon and Tailwind interop recipes (`data-icon`,
-class merging), then docs site, real-browser matrix, and devtools.
+Shipped since the roadmap was written: declarative validation
+(`data-validate`, `LaghuValidate` plugin), WAAPI transitions
+(`data-transition`, reduced-motion aware), async fetch tri-state
+(`data-pending`, `state.$error`), hash router plugin,
+`computed`/`watch`/`persist`, third-party API example.
+
+Next, in order: async fallback templates for fetch, icon and
+Tailwind interop recipes (`data-icon`, class merging), then docs
+site, real-browser matrix, and devtools.
 
 Deliberately out of scope: JSX or any compiler toolchain, VDOM
 diffing in core, built-in auth/i18n/charts/offline-sync, a Node
