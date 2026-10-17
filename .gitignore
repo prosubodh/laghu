@@ -1,4 +1,50 @@
+# Node dependencies
 node_modules/
-.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 *.log
+*.log.*
+
+# Test coverage
+coverage/
+
+# Pack tarballs
+*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env
+.env.local
+.env.*.local
+# npm auto-excludes .npmrc when packing, but git does not: a local
+# .npmrc holding _authToken is committable and would leak a registry credential.
+.npmrc
+.envrc
+
+# laghu: build outputs of bench fixtures
 bench/*/dist
+
+# Local databases (data/ ships in the tarball as a placeholder)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Agent scratch space
+.tmp/
+.tmp-scratch/
+opencode.json
+.agents/.agents/
+
+# Case-insensitive filesystem parity (agents.md is generated/symlinked on Linux, native on macOS/Windows)
+agents.md
+# ...but never ignore the root contract itself: on case-insensitive
+# filesystems (Windows/macOS) the line above also matches AGENTS.md.
+!AGENTS.md
+
+# Local toolchain hook state (vp staged hooks, machine-local)
+.vite-hooks/

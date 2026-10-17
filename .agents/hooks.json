@@ -1,0 +1,57 @@
+{
+  "safety-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .agents/scripts/safety_guard.js",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "architectural-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .agents/scripts/agent_guard.js",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "post-tool-lint": {
+    "enabled": true,
+    "PostToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "stop-verifier": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node .agents/scripts/verify_completion.js",
+        "timeout": 120
+      }
+    ]
+  }
+}
