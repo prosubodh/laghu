@@ -3,145 +3,181 @@
   // src/router.ts
   var LaghuRouter = (() => {
     "use strict";
-    var current = { path: "", params: {} };
-    var afterEachFns = [];
+    let currentRoute = { path: "", params: {} };
+    const globalAfterEachFns = [];
     function compile(pattern) {
-      var names = [];
-      var src = String(pattern).split("/").map(function(seg) {
-        if (seg.charAt(0) === ":") {
-          names.push(seg.slice(1));
+      const paramNames = [];
+      const patternSegments = String(pattern || "").split("/");
+      const regexSegments = patternSegments.map((segment) => {
+        if (segment.startsWith(":")) {
+          paramNames.push(segment.slice(1));
           return "([^/]+)";
         }
-        if (seg === "*") {
-          names.push("wild");
+        if (segment === "*") {
+          paramNames.push("wild");
           return "(.*)";
         }
-        return seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      }).join("/");
-      var re = new RegExp("^" + src + "$");
-      return function(path) {
-        var m = path.match(re);
-        if (!m) return null;
-        var out = {};
-        for (var i = 0; i < names.length; i++) out[names[i]] = decodeURIComponent(m[i + 1] || "");
-        return out;
+        return segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      });
+      const regex = new RegExp(`^${regexSegments.join("/")}$`);
+      return (path) => {
+        const match = path.match(regex);
+        if (!match) return null;
+        const params = {};
+        for (let index = 0; index < paramNames.length; index++) {
+          params[paramNames[index]] = decodeURIComponent(match[index + 1]);
+        }
+        return params;
       };
     }
-    function route(opts) {
-      opts = opts || {};
-      var targetSel = opts.target || "#view";
-      var scope = opts.scope || {};
-      var actions = opts.actions || {};
-      var compiled = (opts.routes || []).map(function(r) {
-        return { match: compile(r.path), render: r.render };
-      });
-      function tplHtml(tpl) {
-        var holder = document.createElement("div");
-        holder.appendChild(tpl.content.cloneNode(true));
-        return holder.innerHTML;
+    function extractTemplateHtml(templateElement) {
+      const container = document.createElement("div");
+      container.appendChild(templateElement.content.cloneNode(true));
+      return container.innerHTML;
+    }
+    function harvestDeclarativeRoutes(hostElement) {
+      const routes = [];
+      let notfoundHtml = "";
+      const templates = hostElement.querySelectorAll("template[data-route]");
+      for (let index = 0; index < templates.length; index++) {
+        const template = templates[index];
+        routes.push({
+          match: compile(template.getAttribute("data-route") || ""),
+          guard: template.getAttribute("data-route-if") || "",
+          html: extractTemplateHtml(template)
+        });
       }
-      var declRoutes = [];
-      var declNotfound = "";
-      if (typeof document !== "undefined") {
-        var host = document.querySelector(targetSel);
-        if (host) {
-          Array.prototype.forEach.call(
-            host.querySelectorAll("template[data-route]"),
-            function(tpl) {
-              declRoutes.push({
-                match: compile(tpl.getAttribute("data-route") || ""),
-                guard: tpl.getAttribute("data-route-if") || "",
-                html: tplHtml(tpl)
-              });
-            }
-          );
-          var nf = host.querySelector("template[data-route-notfound]");
-          if (nf) declNotfound = tplHtml(nf);
-        }
+      const notfoundTemplate = hostElement.querySelector("template[data-route-notfound]");
+      if (notfoundTemplate) {
+        notfoundHtml = extractTemplateHtml(notfoundTemplate);
+      }
+      return { routes, notfoundHtml };
+    }
+    function resolveCurrentPath() {
+      const rawHash = typeof window !== "undefined" ? window.location.hash : "";
+      if (rawHash.length > 1) {
+        return rawHash.slice(1);
+      }
+      return "/";
+    }
+    function safelyInvoke(fn, ...args) {
+      try {
+        fn(...args);
+      } catch {
+      }
+    }
+    function route(opts) {
+      const options = opts || {};
+      const targetSelector = options.target || "#view";
+      const scope = options.scope || {};
+      const actions = options.actions || {};
+      const compiledRoutes = (options.routes || []).map((r) => ({
+        match: compile(r.path),
+        render: r.render
+      }));
+      let declarativeRoutes = [];
+      let declarativeNotFoundHtml = "";
+      const hostElement = typeof document !== "undefined" ? document.querySelector(targetSelector) : null;
+      if (hostElement) {
+        const harvested = harvestDeclarativeRoutes(hostElement);
+        declarativeRoutes = harvested.routes;
+        declarativeNotFoundHtml = harvested.notfoundHtml;
       }
       function render() {
-        var hash = typeof location !== "undefined" && location.hash || "#/";
-        var pathOnly = hash.charAt(0) === "#" ? hash.slice(1) : hash;
-        if (!pathOnly) pathOnly = "/";
-        var from = current;
-        var B = typeof window !== "undefined" && window.Laghu || null;
-        var target = typeof document !== "undefined" ? document.querySelector(targetSel) : null;
-        var declHit = null;
-        for (var d = 0; d < declRoutes.length; d++) {
-          var pm = declRoutes[d].match(pathOnly);
-          if (pm) {
-            declHit = { guard: declRoutes[d].guard, html: declRoutes[d].html, params: pm };
+        const pathOnly = resolveCurrentPath();
+        const from = currentRoute;
+        const laghuInstance = typeof window !== "undefined" && window.Laghu || null;
+        const targetElement = typeof document !== "undefined" ? document.querySelector(targetSelector) : null;
+        let declarativeHit = null;
+        for (let index = 0; index < declarativeRoutes.length; index++) {
+          const matched = declarativeRoutes[index].match(pathOnly);
+          if (matched) {
+            declarativeHit = {
+              guard: declarativeRoutes[index].guard,
+              html: declarativeRoutes[index].html,
+              params: matched
+            };
             break;
           }
         }
-        var i, params = null, hit = null;
-        if (!declHit) {
-          for (i = 0; i < compiled.length; i++) {
-            params = compiled[i].match(pathOnly);
-            if (params) {
-              hit = compiled[i];
+        let matchedParams = null;
+        let matchedRoute = null;
+        if (!declarativeHit) {
+          for (let index = 0; index < compiledRoutes.length; index++) {
+            matchedParams = compiledRoutes[index].match(pathOnly);
+            if (matchedParams) {
+              matchedRoute = compiledRoutes[index];
               break;
             }
           }
         } else {
-          params = declHit.params;
+          matchedParams = declarativeHit.params;
         }
-        var to = { path: pathOnly, params: params || {} };
-        if (typeof opts.beforeEach === "function" && opts.beforeEach(to, from) === false) return;
-        if (declHit && declHit.guard && B && !B.eval(scope, declHit.guard)) return;
-        current = to;
-        if (declHit && B && target) {
-          var child = B.scope ? B.scope(scope, { params: to.params }) : scope;
-          B.swap(target, declHit.html, "inner", child, actions);
+        const to = { path: pathOnly, params: matchedParams || {} };
+        if (typeof options.beforeEach === "function" && options.beforeEach(to, from) === false) {
+          return;
+        }
+        if (declarativeHit && declarativeHit.guard && laghuInstance && !laghuInstance.eval(scope, declarativeHit.guard)) {
+          return;
+        }
+        currentRoute = to;
+        if (declarativeHit && laghuInstance && targetElement) {
+          const childScope = laghuInstance.scope ? laghuInstance.scope(scope, { params: to.params }) : scope;
+          laghuInstance.swap(targetElement, declarativeHit.html, "inner", childScope, actions);
         } else {
-          var html = "";
+          let html = "";
           try {
-            if (hit) html = hit.render(params, to) || "";
-            else if (typeof opts.notfound === "function") html = opts.notfound(to) || "";
-            else html = declNotfound;
-          } catch (e) {
-            if (typeof console !== "undefined") console.error("[laghu-router]", e);
+            if (matchedRoute) {
+              html = matchedRoute.render(matchedParams, to) || "";
+            } else if (typeof options.notfound === "function") {
+              html = options.notfound(to) || "";
+            } else {
+              html = declarativeNotFoundHtml;
+            }
+          } catch (error) {
+            console.error("[laghu-router]", error);
             return;
           }
-          if (B && target) B.swap(target, String(html), "inner", scope, actions);
-        }
-        if (typeof opts.afterEach === "function") {
-          try {
-            opts.afterEach(to, from);
-          } catch (e) {
+          if (laghuInstance && targetElement) {
+            laghuInstance.swap(targetElement, String(html), "inner", scope, actions);
           }
         }
-        for (var k = 0; k < afterEachFns.length; k++) {
-          try {
-            afterEachFns[k](to, from);
-          } catch (e) {
-          }
+        if (typeof options.afterEach === "function") {
+          safelyInvoke(options.afterEach, to, from);
+        }
+        for (let index = 0; index < globalAfterEachFns.length; index++) {
+          safelyInvoke(globalAfterEachFns[index], to, from);
         }
       }
       function onHash() {
         render();
       }
-      if (typeof window !== "undefined") window.addEventListener("hashchange", onHash);
+      if (typeof window !== "undefined") {
+        window.addEventListener("hashchange", onHash);
+      }
       render();
-      return function() {
-        if (typeof window !== "undefined") window.removeEventListener("hashchange", onHash);
+      return function stop() {
+        if (typeof window !== "undefined") {
+          window.removeEventListener("hashchange", onHash);
+        }
       };
     }
-    var api = {
+    return {
       version: "1.1.0",
       route,
       compile,
-      current: function() {
-        return current;
+      current() {
+        return currentRoute;
       },
-      navigate: function(path) {
-        if (typeof location !== "undefined") location.hash = "#" + path;
+      navigate(path) {
+        if (typeof window !== "undefined") {
+          window.location.hash = `#${path}`;
+        }
       },
-      afterEach: function(fn) {
-        afterEachFns.push(fn);
+      afterEach(fn) {
+        globalAfterEachFns.push(fn);
       }
     };
-    return api;
   })();
 
   // src/router.global.ts

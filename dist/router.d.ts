@@ -69,7 +69,7 @@ export interface LaghuRouterOptions {
 }
 export interface LaghuRouterAPI {
     version: string;
-    route(opts: LaghuRouterOptions): () => void;
+    route(opts?: LaghuRouterOptions): () => void;
     compile(pattern: string): (path: string) => Record<string, string> | null;
     current(): {
         path: string;

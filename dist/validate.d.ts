@@ -25,14 +25,17 @@
  *   <button>Join</button>
  * </form>
  */
+export interface ValidationRule {
+    name: string;
+    arg: string;
+}
 export interface LaghuValidateAPI {
     version: string;
     validateField(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string | null;
     validateForm(form: HTMLFormElement): boolean;
-    parseRules(spec: string): Array<{
-        name: string;
-        arg: string;
-    }>;
+    parseRules(spec: string): ValidationRule[];
     scan(root: Element | Document): void;
+    watch?(): void;
+    init?(): void;
 }
 export declare const LaghuValidate: LaghuValidateAPI;

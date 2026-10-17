@@ -27,199 +27,238 @@
  */
 export interface LaghuMorphAPI {
   morph(target: Element, html: string, opts?: { mode?: string }): void;
-  morphEl(a: Element, b: Element): void;
+  morphEl(liveElement: Element, responseElement: Element): void;
   version: string;
 }
 
 export const LaghuMorph: LaghuMorphAPI = (() => {
   "use strict";
+
+  /**
+   * Sync form control values and checked state without overwriting active user typing.
+   */
+  function syncFormControls(liveElement: Element, responseElement: Element): void {
+    const isControl =
+      liveElement instanceof HTMLInputElement ||
+      liveElement instanceof HTMLTextAreaElement ||
+      liveElement instanceof HTMLSelectElement;
+
+    if (!isControl) return;
+
+    const responseValue = (responseElement as HTMLInputElement).value;
+    const isUnfocused = document.activeElement !== liveElement;
+    if (
+      responseValue !== undefined &&
+      (liveElement as HTMLInputElement).value !== responseValue &&
+      isUnfocused
+    ) {
+      (liveElement as HTMLInputElement).value = responseValue;
+    }
+    const responseChecked = (responseElement as HTMLInputElement).checked;
+    if (responseChecked !== undefined) {
+      (liveElement as HTMLInputElement).checked = responseChecked;
+    }
+  }
+
   /**
    * Copy attributes from the new node onto the live node, remove stale
    * ones, and sync form control state without touching focused inputs.
-   * A focused input keeps its typed value even if the server HTML
-   * carries a different value attribute.
-   *
-   * @param {Element} a Live node in the document, updated in place.
-   * @param {Element} b Fresh node parsed from the response, read only.
    */
-  function syncAttrs(a: Element, b: Element) {
-    var bn = b.attributes;
-    var an = a.attributes;
-    var keep = new Set();
-    for (var i = 0; i < bn.length; i++) {
-      var at = bn[i];
-      keep.add(at.name);
-      if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
-    }
-    var rm = [];
-    for (var j = 0; j < an.length; j++) {
-      if (!keep.has(an[j].name)) rm.push(an[j].name);
-    }
-    rm.forEach(function (n: any) {
-      a.removeAttribute(n);
-    });
-    if (
-      a instanceof HTMLInputElement ||
-      a instanceof HTMLTextAreaElement ||
-      a instanceof HTMLSelectElement
-    ) {
-      var bv = (b as any).value;
-      if (bv !== undefined && (a as any).value !== bv && document.activeElement !== a) {
-        (a as any).value = bv;
+  function syncAttrs(liveElement: Element, responseElement: Element): void {
+    const responseAttrs = responseElement.attributes;
+    const liveAttrs = liveElement.attributes;
+    const keepAttributeNames = new Set<string>();
+
+    for (let index = 0; index < responseAttrs.length; index++) {
+      const attribute = responseAttrs[index];
+      keepAttributeNames.add(attribute.name);
+      if (liveElement.getAttribute(attribute.name) !== attribute.value) {
+        liveElement.setAttribute(attribute.name, attribute.value);
       }
-      if ((b as any).checked !== undefined) (a as any).checked = (b as any).checked;
     }
+
+    const attributesToRemove: string[] = [];
+    for (let index = 0; index < liveAttrs.length; index++) {
+      const name = liveAttrs[index].name;
+      if (!keepAttributeNames.has(name)) {
+        attributesToRemove.push(name);
+      }
+    }
+    attributesToRemove.forEach((attributeName) => {
+      liveElement.removeAttribute(attributeName);
+    });
+
+    syncFormControls(liveElement, responseElement);
   }
+
   /**
    * Stable identity of an element for reuse across morphs.
    * Element id wins ("#r1"), then data-bkey ("k:42"), else null
    * (positional reuse by tag name).
-   *
-   * @param {Element} el Element to identify.
-   * @returns {string|null} Key, or null when the element has none.
    */
-  function keyOf(el: Element) {
-    if (el.id) return "#" + el.id;
-    var k = el.getAttribute && el.getAttribute("data-bkey");
-    if (k) return "k:" + k;
+  function keyOf(element: Element): string | null {
+    if (element.id) return "#" + element.id;
+    const customKey = element.getAttribute && element.getAttribute("data-bkey");
+    if (customKey) return "k:" + customKey;
     return null;
   }
+
+  /**
+   * Remove stale children that were not reused in the new reconciliation cycle.
+   */
+  function removeStaleChildren(liveParent: Element, usedNodes: Set<Node>): void {
+    const existingChildren = Array.prototype.slice.call(liveParent.childNodes);
+    existingChildren.forEach((childNode: Node) => {
+      if (childNode instanceof Element) {
+        if (!usedNodes.has(childNode) && liveParent.contains(childNode)) {
+          try {
+            const laghuInstance = (window as any).Laghu;
+            if (laghuInstance && laghuInstance.destroyTree) {
+              laghuInstance.destroyTree(childNode);
+            }
+          } catch {}
+          liveParent.removeChild(childNode);
+        }
+      } else if (childNode.nodeType === 3) {
+        liveParent.removeChild(childNode);
+      }
+    });
+  }
+
+  /**
+   * Find an unkeyed live element matching the tag for positional reuse.
+   */
+  function findPositionalMatch(
+    liveParent: Element,
+    targetTagName: string,
+    usedNodes: Set<Node>,
+  ): Element | null {
+    const liveChildren = liveParent.children;
+    for (let index = 0; index < liveChildren.length; index++) {
+      const candidate = liveChildren[index];
+      if (!usedNodes.has(candidate) && candidate.tagName === targetTagName && !keyOf(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   /**
    * Reconcile one live element against one fresh element, recursively.
-   * Same tag: sync attributes, then match children by key (id or
-   * data-bkey), reuse same-tag unkeyed children positionally, create
-   * the rest, and remove stale nodes (running their laghu cleanups).
-   * Different tag: replace outright. data-morph-skip freezes a subtree.
-   *
-   * @param {Element} oldEl Live element, updated in place.
-   * @param {Element} newEl Fresh element describing the target state.
    */
-  function morphEl(oldEl: Element, newEl: Element) {
-    if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute("data-morph-skip"))
-      return;
-    if (oldEl.tagName !== newEl.tagName) {
-      oldEl.replaceWith(newEl.cloneNode(true));
+  function morphEl(liveElement: Element, responseElement: Element): void {
+    if (
+      liveElement instanceof Element &&
+      liveElement.hasAttribute &&
+      liveElement.hasAttribute("data-morph-skip")
+    ) {
       return;
     }
-    syncAttrs(oldEl, newEl);
-    // reconcile children by key, then positionally
-    var oldByKey: Map<string, Element> = new Map();
-    Array.prototype.forEach.call(oldEl.children, function (c: Element) {
-      var k = keyOf(c);
-      if (k && !oldByKey.has(k)) oldByKey.set(k, c);
+    if (liveElement.tagName !== responseElement.tagName) {
+      liveElement.replaceWith(responseElement.cloneNode(true));
+      return;
+    }
+    syncAttrs(liveElement, responseElement);
+
+    // Reconcile children by key, then positionally
+    const liveChildByKey = new Map<string, Element>();
+    Array.prototype.forEach.call(liveElement.children, (childElement: Element) => {
+      const childKey = keyOf(childElement);
+      if (childKey && !liveChildByKey.has(childKey)) {
+        liveChildByKey.set(childKey, childElement);
+      }
     });
-    var newKids = Array.prototype.slice.call(newEl.childNodes);
-    var used = new Set();
-    var out: Node[] = [];
-    newKids.forEach(function (nk: Node) {
-      if (nk.nodeType === 3) {
-        if (nk.textContent !== null && nk.textContent.trim() !== "") {
-          var t = document.createTextNode(nk.textContent);
-          out.push(t);
+
+    const newChildren = Array.prototype.slice.call(responseElement.childNodes);
+    const usedNodes = new Set<Node>();
+    const reconciledChildren: Node[] = [];
+
+    newChildren.forEach((newChildNode: Node) => {
+      if (newChildNode.nodeType === 3) {
+        if (newChildNode.textContent !== null && newChildNode.textContent.trim() !== "") {
+          const freshTextNode = document.createTextNode(newChildNode.textContent);
+          reconciledChildren.push(freshTextNode);
         }
         return;
       }
-      if (!(nk instanceof Element)) {
-        out.push((nk as Element).cloneNode(true));
+      if (!(newChildNode instanceof Element)) {
+        reconciledChildren.push(newChildNode.cloneNode(true));
         return;
       }
-      var k = keyOf(nk);
-      var match = k ? oldByKey.get(k) : null;
-      if (match && !used.has(match)) {
-        used.add(match);
-        if (match.tagName !== nk.tagName) {
-          // Different tag under the same key: replace outright and adopt
-          // the replacement. Pushing the detached old node here would let
-          // the stale pass below delete the freshly inserted clone.
-          var rep = /** @type {Element} */ (nk.cloneNode(true));
-          match.replaceWith(rep);
-          used.add(rep);
-          out.push(rep);
+
+      const nodeKey = keyOf(newChildNode);
+      const matchedLiveNode = nodeKey ? liveChildByKey.get(nodeKey) : null;
+
+      if (matchedLiveNode && !usedNodes.has(matchedLiveNode)) {
+        usedNodes.add(matchedLiveNode);
+        if (matchedLiveNode.tagName !== newChildNode.tagName) {
+          const replacementClone = newChildNode.cloneNode(true) as Element;
+          matchedLiveNode.replaceWith(replacementClone);
+          usedNodes.add(replacementClone);
+          reconciledChildren.push(replacementClone);
         } else {
-          morphEl(match, nk);
-          out.push(match);
+          morphEl(matchedLiveNode, newChildNode);
+          reconciledChildren.push(matchedLiveNode);
         }
       } else {
-        // positional reuse: same tag among unused
-        var reuse = null;
-        var olds = oldEl.children;
-        for (var i = 0; i < olds.length; i++) {
-          var oc = olds[i];
-          if (!used.has(oc) && oc.tagName === nk.tagName && !keyOf(oc)) {
-            reuse = oc;
-            break;
-          }
-        }
-        if (reuse) {
-          used.add(reuse);
-          morphEl(reuse, nk);
-          out.push(reuse);
+        const positionalMatch = findPositionalMatch(liveElement, newChildNode.tagName, usedNodes);
+        if (positionalMatch) {
+          usedNodes.add(positionalMatch);
+          morphEl(positionalMatch, newChildNode);
+          reconciledChildren.push(positionalMatch);
         } else {
-          out.push(nk.cloneNode(true));
+          reconciledChildren.push(newChildNode.cloneNode(true));
         }
       }
     });
-    // remove stale (except data-preserve handled by core)
-    Array.prototype.forEach.call(Array.prototype.slice.call(oldEl.childNodes), function (c: Node) {
-      if (c instanceof Element) {
-        if (!used.has(c) && oldEl.contains(c)) {
-          try {
-            var B = (window as any).Laghu;
-            if (B && B.destroyTree) B.destroyTree(c);
-          } catch (e) {}
-          oldEl.removeChild(c);
-        }
-      } else if (c.nodeType === 3) {
-        oldEl.removeChild(c);
-      }
-    });
-    out.forEach(function (n: any) {
-      oldEl.appendChild(n);
+
+    removeStaleChildren(liveElement, usedNodes);
+
+    reconciledChildren.forEach((childNode) => {
+      liveElement.appendChild(childNode);
     });
   }
+
   /**
    * Morph a target from an HTML string. Mode "inner" (default) reconciles
-   * children. Mode "outer" reconciles the target element itself against
-   * the first element of the response. Whitespace-only text nodes are
-   * ignored so server formatting never creates phantom diffs.
-   *
-   * @example
-   * LaghuMorph.morph(document.querySelector('#list'), '<li id="r1">one</li>');
-   * LaghuMorph.morph(el, html, { mode: 'outer' });
-   *
-   * @param {Element} target Element to update in place.
-   * @param {string} html Response HTML.
-   * @param {{mode?: string}} [opts] Optional mode, "inner" or "outer".
+   * children. Mode "outer" reconciles the target element itself.
    */
-  function morph(target: Element, html: string, opts: any) {
-    var mode = (opts && opts.mode) || "inner";
-    var tmp = document.createElement("template");
-    tmp.innerHTML = html;
+  function morph(target: Element, html: string, opts?: { mode?: string }): void {
+    const mode = (opts && opts.mode) || "inner";
+    const template = document.createElement("template");
+    template.innerHTML = html;
+
     if (mode === "outer") {
-      var nn = /** @type {Element} */ (
-        tmp.content.firstElementChild || tmp.content.cloneNode(true)
-      );
-      if (nn instanceof Element && target instanceof Element) morphEl(target, nn);
-      else target.replaceWith(tmp.content.cloneNode(true));
+      const responseRoot =
+        template.content.firstElementChild || template.content.cloneNode(true);
+      if (responseRoot instanceof Element && target instanceof Element) {
+        morphEl(target, responseRoot);
+      } else {
+        target.replaceWith(template.content.cloneNode(true));
+      }
       return;
     }
-    var wrap = document.createElement(
-      target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div",
-    );
-    wrap.appendChild(tmp.content.cloneNode(true));
-    // morph target against wrapper: wrap children = new children
-    var fake = document.createElement(target.tagName);
-    // Inner mode reconciles children only. Mirror the target's own
-    // attributes onto the placeholder so syncAttrs does not strip the
-    // container's id/class/data-* (which would break later targeting).
-    Array.prototype.forEach.call(target.attributes, function (at: Attr) {
-      fake.setAttribute(at.name, at.value);
+
+    const wrapperTag =
+      target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div";
+    const wrapper = document.createElement(wrapperTag);
+    wrapper.appendChild(template.content.cloneNode(true));
+
+    const fakeContainer = document.createElement(target.tagName);
+    Array.prototype.forEach.call(target.attributes, (attr: Attr) => {
+      fakeContainer.setAttribute(attr.name, attr.value);
     });
-    Array.prototype.forEach.call(wrap.childNodes, function (n: Node) {
-      fake.appendChild(n.cloneNode(true));
+    Array.prototype.forEach.call(wrapper.childNodes, (node: Node) => {
+      fakeContainer.appendChild(node.cloneNode(true));
     });
-    morphEl(target, fake);
+
+    morphEl(target, fakeContainer);
   }
-  var api: LaghuMorphAPI = { morph: morph, morphEl: morphEl, version: "1.0.0" };
+
+  const api: LaghuMorphAPI = {
+    morph,
+    morphEl,
+    version: "1.0.0",
+  };
   return api;
 })();

@@ -54,9 +54,9 @@ export interface LaghuAPI {
     get(scope: any, path: string): any;
     set(scope: any, path: string, val: any): void;
     parseTrigger(spec: string, el: Element): TriggerSpec;
-    swap(target: Element, html: string, swap: string, scope: any, actions?: Record<string, Function>): void;
+    swap(target: Element, html: string, swap?: string, scope?: any, actions?: Record<string, Function>): void;
     css: string;
-    sanitize(fn: (html: string) => string): void;
+    sanitize(fn?: (html: string) => string): void;
     hydrate(root: Element, state?: Record<string, any>, actions?: Record<string, Function>): any;
     destroyTree(root: Element): void;
     store(name: string, init?: any): any;
@@ -79,5 +79,9 @@ export interface LaghuAPI {
      * on a Proxy-prototyped object would write the parent instead.
      */
     scope(parent: any, vars: Record<string, any>): any;
+    /**
+     * Run initial DOM hydration and observer setup (SSR / lifecycle hook).
+     */
+    init?: () => void;
 }
 export declare const Laghu: LaghuAPI;

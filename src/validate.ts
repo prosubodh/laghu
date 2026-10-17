@@ -26,201 +26,274 @@
  *   <button>Join</button>
  * </form>
  */
+export interface ValidationRule {
+  name: string;
+  arg: string;
+}
+
 export interface LaghuValidateAPI {
   version: string;
   validateField(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string | null;
   validateForm(form: HTMLFormElement): boolean;
-  parseRules(spec: string): Array<{ name: string; arg: string }>;
+  parseRules(spec: string): ValidationRule[];
   scan(root: Element | Document): void;
+  watch?(): void;
+  init?(): void;
 }
 
 export const LaghuValidate: LaghuValidateAPI = (() => {
   "use strict";
-  var EMAIL: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const EMAIL_PATTERN: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   /**
-   * Split "required|min:3|match:pw" into [{name, arg}].
-   * @param {string} spec
-   * @returns {Array<{name: string, arg: string}>}
+   * Split "required|min:3|match:pw" into structured rule descriptors.
    */
-  function parseRules(spec: string) {
+  function parseRules(spec: string): ValidationRule[] {
     return String(spec || "")
       .split("|")
-      .map(function (p: any) {
-        return p.trim();
-      })
+      .map((part) => part.trim())
       .filter(Boolean)
-      .map(function (p: any) {
-        var i = p.indexOf(":");
-        if (i < 0) return { name: p, arg: "" };
-        return { name: p.slice(0, i).trim(), arg: p.slice(i + 1).trim() };
+      .map((part) => {
+        const colonIndex = part.indexOf(":");
+        if (colonIndex < 0) return { name: part, arg: "" };
+        return {
+          name: part.slice(0, colonIndex).trim(),
+          arg: part.slice(colonIndex + 1).trim(),
+        };
       });
   }
 
   /**
-   * Owning form of an input, or null outside forms.
-   * @param {Element} el
-   * @returns {HTMLFormElement|null}
+   * Resolve owning form of an input, or null if outside any form.
    */
-  function ownerForm(el: Element) {
-    if (el instanceof HTMLFormElement) return el;
-    if (el.closest) {
-      var f = el.closest("form");
-      if (f instanceof HTMLFormElement) return f;
+  function ownerForm(element: Element): HTMLFormElement | null {
+    if (element instanceof HTMLFormElement) return element;
+    if (element.closest) {
+      const form = element.closest("form");
+      if (form instanceof HTMLFormElement) return form;
     }
     return null;
   }
 
   /**
-   * Error slot for a field: data-errors-for="name" inside the same
-   * form first, then the whole document.
-   * @param {Element} el
-   * @param {string} name
-   * @returns {Element|null}
+   * Locate the error slot for a field within its form, or in the wider document.
    */
-  function errorSlot(el: Element, name: string) {
-    var form = ownerForm(el);
-    var sel = '[data-errors-for="' + name.replace(/"/g, "") + '"]';
-    var found = form ? form.querySelector(sel) : null;
-    if (found) return found;
-    return typeof document !== "undefined" ? document.querySelector(sel) : null;
+  function findErrorSlot(element: Element, fieldName: string): Element | null {
+    const parentForm = ownerForm(element);
+    const selector = `[data-errors-for="${fieldName.replace(/"/g, "")}"]`;
+    const inForm = parentForm ? parentForm.querySelector(selector) : null;
+    if (inForm) return inForm;
+    return typeof document !== "undefined" ? document.querySelector(selector) : null;
   }
 
   /**
-   * Validate one input against its data-validate rules. Writes the
-   * first message into the error slot, toggles aria-invalid and
-   * data-invalid, and returns the message (null when valid).
-   * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} el
-   * @returns {string|null}
+   * Evaluate a single validation rule against the current field value.
    */
-  function validateField(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
-    var spec = el.getAttribute("data-validate") || "";
-    var rules = parseRules(spec);
-    var name = el.getAttribute("name") || el.id || "field";
-    var val = "value" in el ? String((el as any).value) : "";
-    var msg = null;
-    for (var i = 0; i < rules.length && !msg; i++) {
-      var r = rules[i];
-      if (r.name === "required" && !val.trim()) msg = name + " is required";
-      else if (val !== "") {
-        if (r.name === "email" && !EMAIL.test(val)) msg = name + " must be an email";
-        else if (r.name === "number" && isNaN(Number(val))) msg = name + " must be a number";
-        else if (r.name === "min" && val.length < Number(r.arg))
-          msg = name + " needs at least " + r.arg + " characters";
-        else if (r.name === "max" && val.length > Number(r.arg))
-          msg = name + " needs at most " + r.arg + " characters";
-        else if (r.name === "minv" && Number(val) < Number(r.arg))
-          msg = name + " must be at least " + r.arg;
-        else if (r.name === "maxv" && Number(val) > Number(r.arg))
-          msg = name + " must be at most " + r.arg;
-        else if (r.name === "match") {
-          var form = ownerForm(el);
-          var other = form ? form.querySelector('[name="' + r.arg.replace(/"/g, "") + '"]') : null;
-          var ov = other && "value" in (other as any) ? String((other as any).value) : "";
-          if (val !== ov) msg = name + " must match " + r.arg;
-        }
+  function evaluateRule(
+    rule: ValidationRule,
+    value: string,
+    fieldName: string,
+    element: Element,
+  ): string | null {
+    if (rule.name === "required" && !value.trim()) {
+      return `${fieldName} is required`;
+    }
+    if (value === "") return null;
+
+    switch (rule.name) {
+      case "email":
+        return !EMAIL_PATTERN.test(value) ? `${fieldName} must be an email` : null;
+      case "number":
+        return isNaN(Number(value)) ? `${fieldName} must be a number` : null;
+      case "min":
+        return value.length < Number(rule.arg)
+          ? `${fieldName} needs at least ${rule.arg} characters`
+          : null;
+      case "max":
+        return value.length > Number(rule.arg)
+          ? `${fieldName} needs at most ${rule.arg} characters`
+          : null;
+      case "minv":
+        return Number(value) < Number(rule.arg)
+          ? `${fieldName} must be at least ${rule.arg}`
+          : null;
+      case "maxv":
+        return Number(value) > Number(rule.arg)
+          ? `${fieldName} must be at most ${rule.arg}`
+          : null;
+      case "match": {
+        const parentForm = ownerForm(element);
+        const matchSelector = `[name="${rule.arg.replace(/"/g, "")}"]`;
+        const otherElement = parentForm ? parentForm.querySelector(matchSelector) : null;
+        const otherValue =
+          otherElement && "value" in otherElement ? String((otherElement as any).value) : "";
+        return value !== otherValue ? `${fieldName} must match ${rule.arg}` : null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Validate one input against its data-validate rules.
+   */
+  function validateField(
+    element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  ): string | null {
+    const spec = element.getAttribute("data-validate") || "";
+    const rules = parseRules(spec);
+    const fieldName = element.getAttribute("name") || element.id || "field";
+    const fieldValue = "value" in element ? String((element as any).value) : "";
+
+    let errorMessage: string | null = null;
+    for (let index = 0; index < rules.length; index++) {
+      errorMessage = evaluateRule(rules[index], fieldValue, fieldName, element);
+      if (errorMessage) break;
+    }
+
+    const customMessage = element.getAttribute("data-message");
+    if (errorMessage && customMessage) {
+      errorMessage = customMessage;
+    }
+
+    const slot = findErrorSlot(element, fieldName);
+    if (slot) {
+      slot.textContent = errorMessage || "";
+    }
+
+    element.setAttribute("aria-invalid", errorMessage ? "true" : "false");
+    if (errorMessage) {
+      element.setAttribute("data-invalid", "");
+    } else {
+      element.removeAttribute("data-invalid");
+    }
+
+    return errorMessage;
+  }
+
+  /**
+   * Validate every data-validate control in a form.
+   */
+  function validateForm(formElement: HTMLFormElement): boolean {
+    let firstInvalidField: HTMLElement | null = null;
+    const fields = formElement.querySelectorAll("[data-validate]");
+    for (let index = 0; index < fields.length; index++) {
+      const field = fields[index] as any;
+      field._bTouched = true;
+      if (validateField(field) && !firstInvalidField) {
+        firstInvalidField = field;
       }
     }
-    var custom = el.getAttribute("data-message");
-    if (msg && custom) msg = custom;
-    var slot = errorSlot(el, el.getAttribute("name") || "");
-    if (slot) slot.textContent = msg || "";
-    el.setAttribute("aria-invalid", msg ? "true" : "false");
-    if (msg) el.setAttribute("data-invalid", "");
-    else el.removeAttribute("data-invalid");
-    return msg;
-  }
 
-  /**
-   * Validate every data-validate control in a form. Marks all touched,
-   * focuses the first offender, returns true when clean.
-   * @param {HTMLFormElement} form
-   * @returns {boolean}
-   */
-  function validateForm(form: HTMLFormElement) {
-    var bad: any = null;
-    Array.prototype.forEach.call(form.querySelectorAll("[data-validate]"), function (node: any) {
-      var el = node as any;
-      el._bTouched = true;
-      if (validateField(el) && !bad) bad = el;
-    });
-    if (bad) {
+    if (firstInvalidField) {
       try {
-        bad.focus();
-      } catch (e) {}
+        firstInvalidField.focus();
+      } catch {
+        // Ignored: focusing elements that do not implement focus in test environments
+      }
       return false;
     }
     return true;
   }
 
-  function wireInput(el: any) {
-    if (el._bVal) return;
-    el._bVal = true;
-    el.addEventListener("input", function () {
-      if (el._bTouched || (el.form && el.form._bTried)) validateField(el);
+  function wireField(element: any): void {
+    if (element._bVal) return;
+    element._bVal = true;
+
+    element.addEventListener("input", () => {
+      if (element._bTouched || (element.form && element.form._bTried)) {
+        validateField(element);
+      }
     });
-    el.addEventListener("change", function () {
-      el._bTouched = true;
-      validateField(el);
+
+    element.addEventListener("change", () => {
+      element._bTouched = true;
+      validateField(element);
     });
   }
 
-  function wireForm(form: any) {
-    if (form._bValForm) return;
-    form._bValForm = true;
-    Array.prototype.forEach.call(form.querySelectorAll("[data-validate]"), wireInput);
-    form.addEventListener("submit", function (e: Event) {
-      form._bTried = true;
-      if (!validateForm(form)) {
-        if (e.cancelable) e.preventDefault();
+  function wireForm(formElement: any): void {
+    if (formElement._bValForm) return;
+    formElement._bValForm = true;
+
+    const fields = formElement.querySelectorAll("[data-validate]");
+    for (let index = 0; index < fields.length; index++) {
+      wireField(fields[index]);
+    }
+
+    formElement.addEventListener("submit", (event: Event) => {
+      formElement._bTried = true;
+      if (!validateForm(formElement)) {
+        if (event.cancelable) event.preventDefault();
         return;
       }
-      // Valid forms with a server action submit natively (progressive
-      // enhancement). Actionless forms stay on the page for app code.
-      if (!form.getAttribute("action") && e.cancelable) e.preventDefault();
+      if (!formElement.getAttribute("action") && event.cancelable) {
+        event.preventDefault();
+      }
     });
   }
 
-  function scan(root: Element | Document) {
-    if (!root.querySelectorAll) return;
-    Array.prototype.forEach.call(root.querySelectorAll("[data-validate]"), wireInput);
-    Array.prototype.forEach.call(root.querySelectorAll("form[data-form]"), wireForm);
-  }
-
-  var api: LaghuValidateAPI = {
-    version: "1.2.0",
-    validateField: validateField,
-    validateForm: validateForm,
-    parseRules: parseRules,
-    scan: scan,
-  };
-  function watch() {
-    if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
-    if (!document.documentElement) return;
-    var mo = new MutationObserver(function (muts: any) {
-      muts.forEach(function (m: any) {
-        m.addedNodes.forEach(function (n: any) {
-          if (!(n instanceof Element)) return;
-          if (n.hasAttribute("data-validate")) wireInput(n as any);
-          if (n.tagName === "FORM" && n.hasAttribute("data-form")) wireForm(n as any);
-          if (n.querySelectorAll) {
-            Array.prototype.forEach.call(n.querySelectorAll("[data-validate]"), wireInput);
-            Array.prototype.forEach.call(n.querySelectorAll("form[data-form]"), wireForm);
-          }
-        });
-      });
-    });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-  }
-  if (typeof document !== "undefined") {
-    document.addEventListener("DOMContentLoaded", function () {
-      scan(document);
-      watch();
-    });
-    if (document.readyState !== "loading") {
-      scan(document);
-      watch();
+  function scan(root: Element | Document): void {
+    if (!root || !root.querySelectorAll) return;
+    const fields = root.querySelectorAll("[data-validate]");
+    for (let index = 0; index < fields.length; index++) {
+      wireField(fields[index]);
+    }
+    const forms = root.querySelectorAll("form[data-form]");
+    for (let index = 0; index < forms.length; index++) {
+      wireForm(forms[index]);
     }
   }
-  return api;
+
+  function watch(): void {
+    if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+    if (!document.documentElement) return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (let m = 0; m < mutations.length; m++) {
+        const addedNodes = mutations[m].addedNodes;
+        for (let n = 0; n < addedNodes.length; n++) {
+          const node = addedNodes[n];
+          if (!(node instanceof Element)) continue;
+          if (node.hasAttribute("data-validate")) wireField(node);
+          if (node.tagName === "FORM" && node.hasAttribute("data-form")) wireForm(node);
+          if (node.querySelectorAll) {
+            const nestedFields = node.querySelectorAll("[data-validate]");
+            for (let i = 0; i < nestedFields.length; i++) wireField(nestedFields[i]);
+            const nestedForms = node.querySelectorAll("form[data-form]");
+            for (let i = 0; i < nestedForms.length; i++) wireForm(nestedForms[i]);
+          }
+        }
+      }
+    });
+
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function init(): void {
+    if (typeof document !== "undefined") {
+      document.addEventListener("DOMContentLoaded", () => {
+        scan(document);
+        watch();
+      });
+      if (document.readyState !== "loading") {
+        scan(document);
+        watch();
+      }
+    }
+  }
+
+  init();
+
+  return {
+    version: "1.2.0",
+    validateField,
+    validateForm,
+    parseRules,
+    scan,
+    watch,
+    init,
+  };
 })();
+

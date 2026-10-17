@@ -3,149 +3,192 @@
   // src/validate.ts
   var LaghuValidate = (() => {
     "use strict";
-    var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     function parseRules(spec) {
-      return String(spec || "").split("|").map(function(p) {
-        return p.trim();
-      }).filter(Boolean).map(function(p) {
-        var i = p.indexOf(":");
-        if (i < 0) return { name: p, arg: "" };
-        return { name: p.slice(0, i).trim(), arg: p.slice(i + 1).trim() };
+      return String(spec || "").split("|").map((part) => part.trim()).filter(Boolean).map((part) => {
+        const colonIndex = part.indexOf(":");
+        if (colonIndex < 0) return { name: part, arg: "" };
+        return {
+          name: part.slice(0, colonIndex).trim(),
+          arg: part.slice(colonIndex + 1).trim()
+        };
       });
     }
-    function ownerForm(el) {
-      if (el instanceof HTMLFormElement) return el;
-      if (el.closest) {
-        var f = el.closest("form");
-        if (f instanceof HTMLFormElement) return f;
+    function ownerForm(element) {
+      if (element instanceof HTMLFormElement) return element;
+      if (element.closest) {
+        const form = element.closest("form");
+        if (form instanceof HTMLFormElement) return form;
       }
       return null;
     }
-    function errorSlot(el, name) {
-      var form = ownerForm(el);
-      var sel = '[data-errors-for="' + name.replace(/"/g, "") + '"]';
-      var found = form ? form.querySelector(sel) : null;
-      if (found) return found;
-      return typeof document !== "undefined" ? document.querySelector(sel) : null;
+    function findErrorSlot(element, fieldName) {
+      const parentForm = ownerForm(element);
+      const selector = `[data-errors-for="${fieldName.replace(/"/g, "")}"]`;
+      const inForm = parentForm ? parentForm.querySelector(selector) : null;
+      if (inForm) return inForm;
+      return typeof document !== "undefined" ? document.querySelector(selector) : null;
     }
-    function validateField(el) {
-      var spec = el.getAttribute("data-validate") || "";
-      var rules = parseRules(spec);
-      var name = el.getAttribute("name") || el.id || "field";
-      var val = "value" in el ? String(el.value) : "";
-      var msg = null;
-      for (var i = 0; i < rules.length && !msg; i++) {
-        var r = rules[i];
-        if (r.name === "required" && !val.trim()) msg = name + " is required";
-        else if (val !== "") {
-          if (r.name === "email" && !EMAIL.test(val)) msg = name + " must be an email";
-          else if (r.name === "number" && isNaN(Number(val))) msg = name + " must be a number";
-          else if (r.name === "min" && val.length < Number(r.arg))
-            msg = name + " needs at least " + r.arg + " characters";
-          else if (r.name === "max" && val.length > Number(r.arg))
-            msg = name + " needs at most " + r.arg + " characters";
-          else if (r.name === "minv" && Number(val) < Number(r.arg))
-            msg = name + " must be at least " + r.arg;
-          else if (r.name === "maxv" && Number(val) > Number(r.arg))
-            msg = name + " must be at most " + r.arg;
-          else if (r.name === "match") {
-            var form = ownerForm(el);
-            var other = form ? form.querySelector('[name="' + r.arg.replace(/"/g, "") + '"]') : null;
-            var ov = other && "value" in other ? String(other.value) : "";
-            if (val !== ov) msg = name + " must match " + r.arg;
-          }
+    function evaluateRule(rule, value, fieldName, element) {
+      if (rule.name === "required" && !value.trim()) {
+        return `${fieldName} is required`;
+      }
+      if (value === "") return null;
+      switch (rule.name) {
+        case "email":
+          return !EMAIL_PATTERN.test(value) ? `${fieldName} must be an email` : null;
+        case "number":
+          return isNaN(Number(value)) ? `${fieldName} must be a number` : null;
+        case "min":
+          return value.length < Number(rule.arg) ? `${fieldName} needs at least ${rule.arg} characters` : null;
+        case "max":
+          return value.length > Number(rule.arg) ? `${fieldName} needs at most ${rule.arg} characters` : null;
+        case "minv":
+          return Number(value) < Number(rule.arg) ? `${fieldName} must be at least ${rule.arg}` : null;
+        case "maxv":
+          return Number(value) > Number(rule.arg) ? `${fieldName} must be at most ${rule.arg}` : null;
+        case "match": {
+          const parentForm = ownerForm(element);
+          const matchSelector = `[name="${rule.arg.replace(/"/g, "")}"]`;
+          const otherElement = parentForm ? parentForm.querySelector(matchSelector) : null;
+          const otherValue = otherElement && "value" in otherElement ? String(otherElement.value) : "";
+          return value !== otherValue ? `${fieldName} must match ${rule.arg}` : null;
+        }
+        default:
+          return null;
+      }
+    }
+    function validateField(element) {
+      const spec = element.getAttribute("data-validate") || "";
+      const rules = parseRules(spec);
+      const fieldName = element.getAttribute("name") || element.id || "field";
+      const fieldValue = "value" in element ? String(element.value) : "";
+      let errorMessage = null;
+      for (let index = 0; index < rules.length; index++) {
+        errorMessage = evaluateRule(rules[index], fieldValue, fieldName, element);
+        if (errorMessage) break;
+      }
+      const customMessage = element.getAttribute("data-message");
+      if (errorMessage && customMessage) {
+        errorMessage = customMessage;
+      }
+      const slot = findErrorSlot(element, fieldName);
+      if (slot) {
+        slot.textContent = errorMessage || "";
+      }
+      element.setAttribute("aria-invalid", errorMessage ? "true" : "false");
+      if (errorMessage) {
+        element.setAttribute("data-invalid", "");
+      } else {
+        element.removeAttribute("data-invalid");
+      }
+      return errorMessage;
+    }
+    function validateForm(formElement) {
+      let firstInvalidField = null;
+      const fields = formElement.querySelectorAll("[data-validate]");
+      for (let index = 0; index < fields.length; index++) {
+        const field = fields[index];
+        field._bTouched = true;
+        if (validateField(field) && !firstInvalidField) {
+          firstInvalidField = field;
         }
       }
-      var custom = el.getAttribute("data-message");
-      if (msg && custom) msg = custom;
-      var slot = errorSlot(el, el.getAttribute("name") || "");
-      if (slot) slot.textContent = msg || "";
-      el.setAttribute("aria-invalid", msg ? "true" : "false");
-      if (msg) el.setAttribute("data-invalid", "");
-      else el.removeAttribute("data-invalid");
-      return msg;
-    }
-    function validateForm(form) {
-      var bad = null;
-      Array.prototype.forEach.call(form.querySelectorAll("[data-validate]"), function(node) {
-        var el = node;
-        el._bTouched = true;
-        if (validateField(el) && !bad) bad = el;
-      });
-      if (bad) {
+      if (firstInvalidField) {
         try {
-          bad.focus();
-        } catch (e) {
+          firstInvalidField.focus();
+        } catch {
         }
         return false;
       }
       return true;
     }
-    function wireInput(el) {
-      if (el._bVal) return;
-      el._bVal = true;
-      el.addEventListener("input", function() {
-        if (el._bTouched || el.form && el.form._bTried) validateField(el);
+    function wireField(element) {
+      if (element._bVal) return;
+      element._bVal = true;
+      element.addEventListener("input", () => {
+        if (element._bTouched || element.form && element.form._bTried) {
+          validateField(element);
+        }
       });
-      el.addEventListener("change", function() {
-        el._bTouched = true;
-        validateField(el);
+      element.addEventListener("change", () => {
+        element._bTouched = true;
+        validateField(element);
       });
     }
-    function wireForm(form) {
-      if (form._bValForm) return;
-      form._bValForm = true;
-      Array.prototype.forEach.call(form.querySelectorAll("[data-validate]"), wireInput);
-      form.addEventListener("submit", function(e) {
-        form._bTried = true;
-        if (!validateForm(form)) {
-          if (e.cancelable) e.preventDefault();
+    function wireForm(formElement) {
+      if (formElement._bValForm) return;
+      formElement._bValForm = true;
+      const fields = formElement.querySelectorAll("[data-validate]");
+      for (let index = 0; index < fields.length; index++) {
+        wireField(fields[index]);
+      }
+      formElement.addEventListener("submit", (event) => {
+        formElement._bTried = true;
+        if (!validateForm(formElement)) {
+          if (event.cancelable) event.preventDefault();
           return;
         }
-        if (!form.getAttribute("action") && e.cancelable) e.preventDefault();
+        if (!formElement.getAttribute("action") && event.cancelable) {
+          event.preventDefault();
+        }
       });
     }
     function scan(root) {
-      if (!root.querySelectorAll) return;
-      Array.prototype.forEach.call(root.querySelectorAll("[data-validate]"), wireInput);
-      Array.prototype.forEach.call(root.querySelectorAll("form[data-form]"), wireForm);
+      if (!root || !root.querySelectorAll) return;
+      const fields = root.querySelectorAll("[data-validate]");
+      for (let index = 0; index < fields.length; index++) {
+        wireField(fields[index]);
+      }
+      const forms = root.querySelectorAll("form[data-form]");
+      for (let index = 0; index < forms.length; index++) {
+        wireForm(forms[index]);
+      }
     }
-    var api = {
+    function watch() {
+      if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+      if (!document.documentElement) return;
+      const observer = new MutationObserver((mutations) => {
+        for (let m = 0; m < mutations.length; m++) {
+          const addedNodes = mutations[m].addedNodes;
+          for (let n = 0; n < addedNodes.length; n++) {
+            const node = addedNodes[n];
+            if (!(node instanceof Element)) continue;
+            if (node.hasAttribute("data-validate")) wireField(node);
+            if (node.tagName === "FORM" && node.hasAttribute("data-form")) wireForm(node);
+            if (node.querySelectorAll) {
+              const nestedFields = node.querySelectorAll("[data-validate]");
+              for (let i = 0; i < nestedFields.length; i++) wireField(nestedFields[i]);
+              const nestedForms = node.querySelectorAll("form[data-form]");
+              for (let i = 0; i < nestedForms.length; i++) wireForm(nestedForms[i]);
+            }
+          }
+        }
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+    function init() {
+      if (typeof document !== "undefined") {
+        document.addEventListener("DOMContentLoaded", () => {
+          scan(document);
+          watch();
+        });
+        if (document.readyState !== "loading") {
+          scan(document);
+          watch();
+        }
+      }
+    }
+    init();
+    return {
       version: "1.2.0",
       validateField,
       validateForm,
       parseRules,
-      scan
+      scan,
+      watch,
+      init
     };
-    function watch() {
-      if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
-      if (!document.documentElement) return;
-      var mo = new MutationObserver(function(muts) {
-        muts.forEach(function(m) {
-          m.addedNodes.forEach(function(n) {
-            if (!(n instanceof Element)) return;
-            if (n.hasAttribute("data-validate")) wireInput(n);
-            if (n.tagName === "FORM" && n.hasAttribute("data-form")) wireForm(n);
-            if (n.querySelectorAll) {
-              Array.prototype.forEach.call(n.querySelectorAll("[data-validate]"), wireInput);
-              Array.prototype.forEach.call(n.querySelectorAll("form[data-form]"), wireForm);
-            }
-          });
-        });
-      });
-      mo.observe(document.documentElement, { childList: true, subtree: true });
-    }
-    if (typeof document !== "undefined") {
-      document.addEventListener("DOMContentLoaded", function() {
-        scan(document);
-        watch();
-      });
-      if (document.readyState !== "loading") {
-        scan(document);
-        watch();
-      }
-    }
-    return api;
   })();
 
   // src/validate.global.ts

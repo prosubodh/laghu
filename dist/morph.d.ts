@@ -28,7 +28,7 @@ export interface LaghuMorphAPI {
     morph(target: Element, html: string, opts?: {
         mode?: string;
     }): void;
-    morphEl(a: Element, b: Element): void;
+    morphEl(liveElement: Element, responseElement: Element): void;
     version: string;
 }
 export declare const LaghuMorph: LaghuMorphAPI;
