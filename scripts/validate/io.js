@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Reporter seam. Tests inject a collector so assertions can read the exact
@@ -11,7 +11,7 @@ export function createReporter(sink = console) {
     warn: (msg) => sink.log(`  ⚠️  ${msg}`),
     fail: (msg) => sink.log(`  ❌ ${msg}`),
     log: (msg) => sink.log(msg),
-    heading: (msg) => sink.log(msg)
+    heading: (msg) => sink.log(msg),
   };
 }
 
@@ -26,10 +26,12 @@ export function readTextOrFail(filePath, label, fail) {
   try {
     const st = fs.statSync(filePath);
     if (!st.isFile()) {
-      fail(`${label} is not a regular file (${st.isDirectory() ? 'it is a directory' : 'special file'}).`);
+      fail(
+        `${label} is not a regular file (${st.isDirectory() ? "it is a directory" : "special file"}).`,
+      );
       return null;
     }
-    return fs.readFileSync(filePath, 'utf-8');
+    return fs.readFileSync(filePath, "utf-8");
   } catch (err) {
     fail(`Could not read ${label}: ${err.code || err.message}`);
     return null;
@@ -50,11 +52,11 @@ export function walkMarkdown(root, label, fail) {
       continue;
     }
     for (const entry of entries) {
-      if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      if (entry.name === ".git" || entry.name === "node_modules") continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         stack.push(full);
-      } else if (entry.name.toLowerCase().endsWith('.md')) {
+      } else if (entry.name.toLowerCase().endsWith(".md")) {
         out.push(full);
       }
     }

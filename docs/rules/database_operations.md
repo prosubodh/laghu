@@ -17,6 +17,7 @@ flowchart LR
 ```
 
 ### Invariants:
+
 1. **Never Rename Columns in a Single Step**: Renaming a column causes running application instances to crash. Always expand with a new column, dual-write, backfill, and drop the old column in a subsequent release.
 2. **Concurrent Index Creation**: In PostgreSQL, never create indexes with standard blocking DDL. Always use `CREATE INDEX CONCURRENTLY` to prevent locking table writes.
 3. **Declarative Migration Tooling**: Standardize on open-source declarative migration tools (e.g. **Atlas**, **Flyway**, or **Liquibase**) that compute deterministic migration plans against production schemas.
@@ -28,6 +29,7 @@ flowchart LR
 A catastrophic database performance bottleneck is the **N+1 Query Problem**, where an application executes 1 query for a list and $N$ additional queries for related records in a loop.
 
 ### Invariants:
+
 1. **Mandatory DataLoader / Batch Fetching**: In GraphQL resolvers, ORM mappers, or loop iterations, always batch entity queries via a DataLoader or SQL `IN (...)` batch queries:
    ```typescript
    // Correct: Single batched query for all tenant users
@@ -36,7 +38,7 @@ A catastrophic database performance bottleneck is the **N+1 Query Problem**, whe
 2. **Composite Tenant Indexes**: In multi-tenant systems, every primary lookup index must include `tenant_id` as the leading column:
    ```sql
    -- Correct: Optimized for tenant-scoped date range filtering
-   CREATE INDEX idx_orders_tenant_created 
+   CREATE INDEX idx_orders_tenant_created
      ON orders (tenant_id, created_at DESC);
    ```
 3. **Index Hygiene & Covering Indexes**: Use `EXPLAIN (ANALYZE, BUFFERS)` to verify index scans. For high-frequency queries, use covering indexes (`INCLUDE (...)`) to satisfy queries directly from index pages without heap fetches.
@@ -48,6 +50,7 @@ A catastrophic database performance bottleneck is the **N+1 Query Problem**, whe
 Database connections are expensive resources requiring thread stacks and memory allocation. An uncapped connection pool will exhaust database memory and crash the server under load spikes.
 
 ### Invariants:
+
 1. **Dedicated Connection Pooling**: In production, deploy a dedicated connection pooler (e.g. **PgBouncer** in transaction pooling mode for PostgreSQL, or **HikariCP** in JVM runtimes).
 2. **Connection Sizing Formula**: Size application pools conservatively using the standard Postgres sizing formula:
    $$\text{connections} = ((\text{core\_count} \times 2) + \text{effective\_disk\_count})$$

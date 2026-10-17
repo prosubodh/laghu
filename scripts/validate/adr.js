@@ -1,7 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { readTextOrFail } from './io.js';
-import { stripHtmlComments, stripFencedCode } from './text.js';
+import fs from "node:fs";
+import path from "node:path";
+import { readTextOrFail } from "./io.js";
+import { stripHtmlComments, stripFencedCode } from "./text.js";
 
 function parseAdrLedger(memoryText) {
   const withoutComments = stripFencedCode(stripHtmlComments(memoryText));
@@ -16,13 +16,13 @@ function parseAdrLedger(memoryText) {
     .filter((id) => !entryIds.includes(id));
 
   const indexIds = [];
-  const tableRows = withoutComments.split('\n').filter((line) => /^\s*\|/.test(line));
+  const tableRows = withoutComments.split("\n").filter((line) => /^\s*\|/.test(line));
   for (const row of tableRows) {
     // Skip the header and separator rows.
     if (/^\s*\|[\s|:-]+\|\s*$/.test(row)) continue;
     // cells[1] always exists: the row filter above guarantees a leading pipe,
     // so splitting on '|' yields at least two cells.
-    const first = row.split('|')[1];
+    const first = row.split("|")[1];
     const m = first.match(/ADR-(\d+)/);
     if (m) indexIds.push(Number(m[1]));
   }
@@ -35,14 +35,14 @@ function parseAdrLedger(memoryText) {
 // Match the ledger's own ADR-001 zero-padded convention so messages can be
 // grepped back to the offending heading.
 function ledgerLabel(id) {
-  return `ADR-${String(id).padStart(3, '0')}`;
+  return `ADR-${String(id).padStart(3, "0")}`;
 }
 
 function reportMalformedHeadings(parsed, fail) {
   for (const id of parsed.malformed) {
     fail(
       `${ledgerLabel(id)} appears in memory.md with a non-standard heading. ` +
-      'ADR entries must use exactly "#### ADR-NNN: Title" at h4.'
+        'ADR entries must use exactly "#### ADR-NNN: Title" at h4.',
     );
   }
   for (const id of parsed.duplicateIds) {
@@ -73,10 +73,10 @@ function isLedgerClean(parsed, driftClean) {
  * is at least one ADR entry to cross-check, otherwise 'clean-slate'.
  */
 function checkAdrIndexConsistency(workspaceRoot, fail, pass) {
-  const memoryFile = path.join(workspaceRoot, 'memory.md');
-  if (!fs.existsSync(memoryFile)) return 'clean-slate';
-  const ledgerText = readTextOrFail(memoryFile, 'memory.md', fail);
-  if (ledgerText === null) return 'clean-slate';
+  const memoryFile = path.join(workspaceRoot, "memory.md");
+  if (!fs.existsSync(memoryFile)) return "clean-slate";
+  const ledgerText = readTextOrFail(memoryFile, "memory.md", fail);
+  if (ledgerText === null) return "clean-slate";
 
   const parsed = parseAdrLedger(ledgerText);
 
@@ -88,15 +88,15 @@ function checkAdrIndexConsistency(workspaceRoot, fail, pass) {
   // Fail closed: an index that advertises an ADR must have a matching entry,
   // even when no well-formed entry was parsed at all.
   if (parsed.entryIds.length === 0 && parsed.indexIds.length === 0) {
-    return parsed.malformed.length === 0 ? 'clean-slate' : 'inconsistent';
+    return parsed.malformed.length === 0 ? "clean-slate" : "inconsistent";
   }
 
   const driftClean = reportIndexDrift(parsed, fail);
   if (isLedgerClean(parsed, driftClean)) {
     pass(`ADR Master Index matches all ${parsed.entryIds.length} ADR entries in memory.md.`);
-    return 'indexed';
+    return "indexed";
   }
-  return 'inconsistent';
+  return "inconsistent";
 }
 
 /**
@@ -106,12 +106,12 @@ function checkAdrIndexConsistency(workspaceRoot, fail, pass) {
  */
 function checkGlossaryPopulated(workspaceRoot, verdicts) {
   const { fail } = verdicts;
-  const glossary = path.join(workspaceRoot, 'docs', 'knowledge', 'ubiquitous_language.md');
+  const glossary = path.join(workspaceRoot, "docs", "knowledge", "ubiquitous_language.md");
   if (!fs.existsSync(glossary)) {
-    fail('Missing docs/knowledge/ubiquitous_language.md (required once ADRs exist).');
+    fail("Missing docs/knowledge/ubiquitous_language.md (required once ADRs exist).");
     return;
   }
-  const raw = readTextOrFail(glossary, 'ubiquitous_language.md', fail);
+  const raw = readTextOrFail(glossary, "ubiquitous_language.md", fail);
   if (raw === null) return;
   checkGlossaryTerms(raw, verdicts, workspaceRoot);
 }
@@ -124,32 +124,32 @@ function checkGlossaryTerms(raw, verdicts, workspaceRoot) {
     reportWaiverOutcome(workspaceRoot, verdicts.pass, verdicts.warn);
     return;
   }
-  const withoutComments = raw.replace(/<!--[\s\S]*?-->/g, '');
-  const rows = withoutComments.split('\n').filter((line) => /^\s*\|/.test(line));
+  const withoutComments = raw.replace(/<!--[\s\S]*?-->/g, "");
+  const rows = withoutComments.split("\n").filter((line) => /^\s*\|/.test(line));
   // Header + separator + one placeholder row = still a template.
   const realTerms = rows.slice(2).filter((line) => !/No domain terms defined yet/i.test(line));
   if (realTerms.length === 0) {
-    fail('ubiquitous_language.md has no domain terms, but memory.md records ADRs. Define the vocabulary during Domain Discovery.');
+    fail(
+      "ubiquitous_language.md has no domain terms, but memory.md records ADRs. Define the vocabulary during Domain Discovery.",
+    );
   }
 }
 
 function reportWaiverOutcome(workspaceRoot, pass, warn) {
-  const isTemplateItself = path.basename(workspaceRoot) === 'azcodr';
+  const isTemplateItself = path.basename(workspaceRoot) === "azcodr";
   if (isTemplateItself) {
-    pass('ubiquitous_language.md is intentionally blank (template waiver).');
+    pass("ubiquitous_language.md is intentionally blank (template waiver).");
   } else {
-    warn('ubiquitous_language.md carries the azcodr template waiver; delete the marker and define this project\'s vocabulary.');
+    warn(
+      "ubiquitous_language.md carries the azcodr template waiver; delete the marker and define this project's vocabulary.",
+    );
   }
 }
 
-export {
-  parseAdrLedger,
-  checkAdrIndexConsistency,
-  checkGlossaryPopulated
-};
+export { parseAdrLedger, checkAdrIndexConsistency, checkGlossaryPopulated };
 
 export default {
   parseAdrLedger,
   checkAdrIndexConsistency,
-  checkGlossaryPopulated
+  checkGlossaryPopulated,
 };

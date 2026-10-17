@@ -5,13 +5,13 @@ Clean slate per lets-build: no template ADRs carried over.
 
 ### ADR Master Index
 
-| ADR | Title | Date | Status | Governs |
-| --- | ----- | ---- | ------ | ------- |
-| [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code) | Adopt azcodr governance, keep laghu code | 2026-10-16 | ACCEPTED | [`AGENTS.md`](./AGENTS.md) |
-| [ADR-004](./memory.md#adr-004-azcodr-check-triage-scope-boundary) | azcodr check triage scope boundary | 2026-10-16 | SUPERSEDED by ADR-005 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
-| [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src) | Vitest TDD, units against src | 2026-10-16 | ACCEPTED | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
-| [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption) | TypeScript source, zero-build consumption | 2026-10-16 | ACCEPTED | [`tsconfig.json`](./tsconfig.json) |
-| [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline) | Target Technology Stack & Scaffolding Baseline | 2026-10-16 | ACCEPTED | [`README.md`](./README.md) |
+| ADR                                                                         | Title                                          | Date       | Status                | Governs                                |
+| --------------------------------------------------------------------------- | ---------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
+| [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code)      | Adopt azcodr governance, keep laghu code       | 2026-10-16 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
+| [ADR-004](./memory.md#adr-004-azcodr-check-triage-scope-boundary)           | azcodr check triage scope boundary             | 2026-10-16 | SUPERSEDED by ADR-005 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                 | Vitest TDD, units against src                  | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)     | TypeScript source, zero-build consumption      | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
+| [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline) | Target Technology Stack & Scaffolding Baseline | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
 
 #### ADR-005: Adopt azcodr governance, keep laghu code
 
@@ -114,6 +114,7 @@ Clean slate per lets-build: no template ADRs carried over.
 - Consequences: `memory.md` is now the decision ledger; every
   later ADR appends newest-first. No scaffolding or rewrites
   until the blueprint below is approved.
+
 #### ADR-003: Vitest TDD, units against src
 
 - Status: implemented 2026-10-16 (supersedes ad-hoc node harnesses)

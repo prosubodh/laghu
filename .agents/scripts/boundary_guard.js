@@ -8,10 +8,10 @@
  * dependencies. The engine is vendored under `.agents/lib/` and byte-locked to
  * `lib/boundaries.js`; this wrapper only resolves it and reports the verdict.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import process from 'node:process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const selfDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,8 +22,8 @@ const selfDir = path.dirname(fileURLToPath(import.meta.url));
 //   3. ../../lib/boundaries.js — azcodr repo dev layout (fallback only).
 const engineCandidates = [
   process.env.AZCODR_BOUNDARY_ENGINE,
-  path.resolve(selfDir, '../lib/boundaries.js'),
-  path.resolve(selfDir, '../../lib/boundaries.js')
+  path.resolve(selfDir, "../lib/boundaries.js"),
+  path.resolve(selfDir, "../../lib/boundaries.js"),
 ].filter(Boolean);
 
 async function getEngine() {
@@ -41,8 +41,8 @@ async function getEngine() {
   }
   // Fail CLOSED: a guard with no engine is a broken install, never a silent pass.
   console.error(
-    '🚨 Boundary Guard misconfigured: engine module not found, refusing to fail open. Tried:\n' +
-    tried.map((t) => `  - ${t}`).join('\n')
+    "🚨 Boundary Guard misconfigured: engine module not found, refusing to fail open. Tried:\n" +
+      tried.map((t) => `  - ${t}`).join("\n"),
   );
   process.exit(2);
 }
@@ -50,26 +50,28 @@ async function getEngine() {
 function resolveTarget(positional) {
   const explicit = positional[0];
   if (explicit) return path.resolve(explicit);
-  const srcDir = path.resolve(process.cwd(), 'src');
+  const srcDir = path.resolve(process.cwd(), "src");
   return fs.existsSync(srcDir) ? srcDir : process.cwd();
 }
 
 function rel(p) {
-  return path.relative(process.cwd(), p) || '.';
+  return path.relative(process.cwd(), p) || ".";
 }
 
 function printReport(report) {
-  console.log('🔍 Inspecting Architectural Boundaries in: ' + rel(report.targetDir));
-  console.log('--------------------------------------------------------------');
+  console.log("🔍 Inspecting Architectural Boundaries in: " + rel(report.targetDir));
+  console.log("--------------------------------------------------------------");
   if (report.ok) {
     console.log(`✅ No cycles or boundary violations across ${report.moduleCount} module(s).`);
     return;
   }
   for (const cycle of report.cycles) {
-    console.error('   - Circular Dependency: ' + cycle.map(rel).join(' -> '));
+    console.error("   - Circular Dependency: " + cycle.map(rel).join(" -> "));
   }
   for (const v of report.violations) {
-    console.error(`   - Layer Boundary Breach: ${rel(v.file)} imports ${rel(v.importedFile)} (${v.fromLayer} -> ${v.toLayer})`);
+    console.error(
+      `   - Layer Boundary Breach: ${rel(v.file)} imports ${rel(v.importedFile)} (${v.fromLayer} -> ${v.toLayer})`,
+    );
   }
 }
 
@@ -78,8 +80,8 @@ function emit(report, silent) {
 }
 
 async function main() {
-  const args = process.argv.slice(2).filter((a) => a !== '--silent');
-  const silent = process.argv.includes('--silent');
+  const args = process.argv.slice(2).filter((a) => a !== "--silent");
+  const silent = process.argv.includes("--silent");
   const { inspectBoundaries } = await getEngine();
   const target = resolveTarget(args);
   const report = inspectBoundaries(target);

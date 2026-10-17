@@ -2,7 +2,7 @@
  * line, and the scoreboard. Cells are objects (not primitives) so row
  * actions can mutate them without scope shadowing. See apps/README. */
 var TttStore = (function () {
-  'use strict';
+  "use strict";
 
   function freshCells() {
     var out = [];
@@ -13,15 +13,17 @@ var TttStore = (function () {
   function initial() {
     return {
       cells: freshCells(),
-      turn: 'X',
+      turn: "X",
       winner: null,
-      status: 'Turn: X',
-      score: { X: 0, O: 0, D: 0 }
+      status: "Turn: X",
+      score: { X: 0, O: 0, D: 0 },
     };
   }
 
   function refresh(store) {
-    var vals = store.cells.map(function (c) { return c.v; });
+    var vals = store.cells.map(function (c) {
+      return c.v;
+    });
     var w = TttGame.winnerOf(vals);
     store.winner = w;
     for (var i = 0; i < 9; i++) {
@@ -35,14 +37,14 @@ var TttStore = (function () {
     var cell = store.cells[i];
     if (!cell || cell.v || store.winner) return false;
     cell.v = store.turn;
-    if (!store.winner) store.turn = store.turn === 'X' ? 'O' : 'X';
+    if (!store.winner) store.turn = store.turn === "X" ? "O" : "X";
     refresh(store);
     return true;
   }
 
   function newRound(store) {
     store.cells = freshCells();
-    store.turn = 'X';
+    store.turn = "X";
     store.winner = null;
     store.status = TttGame.statusText(store);
   }
@@ -61,6 +63,6 @@ var TttStore = (function () {
     refresh: refresh,
     place: place,
     newRound: newRound,
-    resetAll: resetAll
+    resetAll: resetAll,
   };
 })();

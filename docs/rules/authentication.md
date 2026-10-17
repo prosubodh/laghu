@@ -73,4 +73,3 @@
     2. Authenticate the selected demo persona and update auth context.
     3. Trigger role-appropriate navigation (e.g. switching to Member navigates to `/portal`; switching to Operator navigates to `/`).
 - **Zero Production Leaks**: In production builds (`import.meta.env.PROD`), the developer persona switcher must be tree-shaken and completely stripped from the bundle.
-

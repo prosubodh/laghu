@@ -1,5 +1,5 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - declarative router</title>
 <nav>
   <a href="#/">home</a>
@@ -29,12 +29,18 @@
 <script src="../dist/router.min.js"></script>
 <script>
   var s = Laghu.reactive({ n: 0, isAdmin: false });
-  Laghu.hydrate(document.querySelector('nav'), s, {});
+  Laghu.hydrate(document.querySelector("nav"), s, {});
   // nav markup lives outside #view; the toggle is plain wiring
-  document.querySelector('#toggle').addEventListener('click', function () {
+  document.querySelector("#toggle").addEventListener("click", function () {
     s.isAdmin = !s.isAdmin;
   });
-  LaghuRouter.route({ target: '#view', scope: s, actions: {
-    inc: function () { s.n++; }
-  }});
+  LaghuRouter.route({
+    target: "#view",
+    scope: s,
+    actions: {
+      inc: function () {
+        s.n++;
+      },
+    },
+  });
 </script>

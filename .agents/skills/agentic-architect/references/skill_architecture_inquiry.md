@@ -57,7 +57,7 @@
 When asking the user or interrogating the workspace, use this questionnaire:
 
 1. **Scope:** Is this workflow continuous (applies whenever writing code in this domain) or episodic (triggered only on explicit request)?
-2. **Triggers:** When should the AI automatically reach for this skill? What tasks should it actively *refuse* to use this skill for?
+2. **Triggers:** When should the AI automatically reach for this skill? What tasks should it actively _refuse_ to use this skill for?
 3. **Pitfalls:** What has the AI historically messed up when doing this task (e.g. hallucinating dependencies, using wrong flags, creating leaky abstractions)?
 4. **Determinism:** Are there shell commands or formatting rules that should be guaranteed with a script rather than left to LLM chance?
 5. **Output Standard:** What does the ideal, gold-standard output look like?

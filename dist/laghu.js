@@ -13,7 +13,17 @@
     var activeEffect = null;
     var jobQueue = /* @__PURE__ */ new Set();
     var flushing = false;
-    var URL_ATTRS = { href: 1, src: 1, action: 1, formaction: 1, cite: 1, poster: 1, data: 1, srcset: 1, srcdoc: 1 };
+    var URL_ATTRS = {
+      href: 1,
+      src: 1,
+      action: 1,
+      formaction: 1,
+      cite: 1,
+      poster: 1,
+      data: 1,
+      srcset: 1,
+      srcdoc: 1
+    };
     function badSeg(seg) {
       return seg === "__proto__" || seg === "constructor" || seg === "prototype";
     }
@@ -26,20 +36,25 @@
       s = s.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, "");
       s = s.replace(/<\/?(iframe|object|embed|link|meta|base)[^>]*>/gi, "");
       s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-      s = s.replace(/(href|src|xlink:href|action|formaction|poster|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, function(m, a, q, d1, d2, d3) {
-        var v = d1 !== void 0 ? d1 : d2 !== void 0 ? d2 : d3;
-        if (unsafeUrl(v)) return a + '="#"';
-        return m;
-      });
+      s = s.replace(
+        /(href|src|xlink:href|action|formaction|poster|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi,
+        function(m, a, q, d1, d2, d3) {
+          var v = d1 !== void 0 ? d1 : d2 !== void 0 ? d2 : d3;
+          if (unsafeUrl(v)) return a + '="#"';
+          return m;
+        }
+      );
       return s;
     }
     var sanitize = defaultSanitize;
     function reportError(err) {
       try {
         if (typeof document !== "undefined" && document.dispatchEvent) {
-          document.dispatchEvent(new CustomEvent("laghu:error", {
-            detail: { error: String(err && err.message || err), version: VERSION }
-          }));
+          document.dispatchEvent(
+            new CustomEvent("laghu:error", {
+              detail: { error: String(err && err.message || err), version: VERSION }
+            })
+          );
         }
       } catch (e) {
       }
@@ -170,7 +185,8 @@
       var parts = String(path).split(".");
       for (var g = 0; g < parts.length; g++) {
         if (badSeg(parts[g].trim())) {
-          if (DEV && typeof console !== "undefined") console.warn('[laghu] blocked unsafe path "' + path + '"');
+          if (DEV && typeof console !== "undefined")
+            console.warn('[laghu] blocked unsafe path "' + path + '"');
           return;
         }
       }
@@ -404,7 +420,8 @@
         }
         if (gm === s.length - 1) return evalExpr(scope, s.slice(1, -1));
       }
-      if (s[0] === '"' && s[s.length - 1] === '"' || s[0] === "'" && s[s.length - 1] === "'") return s.slice(1, -1);
+      if (s[0] === '"' && s[s.length - 1] === '"' || s[0] === "'" && s[s.length - 1] === "'")
+        return s.slice(1, -1);
       if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
       if (s === "true") return true;
       if (s === "false") return false;
@@ -444,7 +461,8 @@
                 }) : [];
                 return fn.apply(scope, args);
               }
-              if (DEV && typeof console !== "undefined") console.warn('[laghu] unknown method "' + s + '"');
+              if (DEV && typeof console !== "undefined")
+                console.warn('[laghu] unknown method "' + s + '"');
               return void 0;
             }
           }
@@ -579,7 +597,8 @@
         if (el.hidden) return;
         var kind = el.getAttribute("data-transition") || "";
         if (!kind || kind === "none") return;
-        if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches)
+          return;
         if (typeof el.animate !== "function") return;
         var dur = transDur(el);
         try {
@@ -643,7 +662,8 @@
       try {
         return JSON.parse(raw);
       } catch (e) {
-        if (DEV && typeof console !== "undefined") console.warn("[laghu] data-scope must be JSON. Got: " + raw);
+        if (DEV && typeof console !== "undefined")
+          console.warn("[laghu] data-scope must be JSON. Got: " + raw);
         return {};
       }
     }
@@ -672,7 +692,18 @@
       return "click";
     }
     function parseTrigger(spec, el) {
-      var out = { on: "", delay: 0, throttle: 0, once: false, changed: false, queue: "last", from: "", every: 0, load: false, revealed: false };
+      var out = {
+        on: "",
+        delay: 0,
+        throttle: 0,
+        once: false,
+        changed: false,
+        queue: "last",
+        from: "",
+        every: 0,
+        load: false,
+        revealed: false
+      };
       var s = String(spec || "").trim();
       if (!s) {
         out.on = defaultEvent(el);
@@ -840,41 +871,68 @@
       return s;
     }
     [
-      ["uppercase", function(v) {
-        return String(v ?? "").toUpperCase();
-      }],
-      ["lowercase", function(v) {
-        return String(v ?? "").toLowerCase();
-      }],
-      ["json", function(v) {
-        try {
-          return JSON.stringify(v);
-        } catch (e) {
-          return String(v);
+      [
+        "uppercase",
+        function(v) {
+          return String(v ?? "").toUpperCase();
         }
-      }],
-      ["fixed", function(v, a) {
-        var n = Number(v);
-        return isNaN(n) ? String(v ?? "") : n.toFixed(numArg(strArg(a)));
-      }],
-      ["currency", function(v, a) {
-        var n = Number(v);
-        var c = strArg(a) || "$";
-        return isNaN(n) ? String(v ?? "") : c + n.toFixed(2);
-      }],
-      ["date", function(v, a) {
-        var d = new Date(v);
-        return isNaN(d.getTime()) ? "" : d.toLocaleDateString(strArg(a) || void 0);
-      }],
-      ["default", function(v, a) {
-        return v === null || v === void 0 || v === "" ? strArg(a) : v;
-      }],
-      ["join", function(v, a) {
-        return Array.isArray(v) ? v.join(a === "" ? ", " : strArg(a)) : v;
-      }],
-      ["length", function(v) {
-        return v == null ? 0 : v.length === void 0 ? 0 : v.length;
-      }]
+      ],
+      [
+        "lowercase",
+        function(v) {
+          return String(v ?? "").toLowerCase();
+        }
+      ],
+      [
+        "json",
+        function(v) {
+          try {
+            return JSON.stringify(v);
+          } catch (e) {
+            return String(v);
+          }
+        }
+      ],
+      [
+        "fixed",
+        function(v, a) {
+          var n = Number(v);
+          return isNaN(n) ? String(v ?? "") : n.toFixed(numArg(strArg(a)));
+        }
+      ],
+      [
+        "currency",
+        function(v, a) {
+          var n = Number(v);
+          var c = strArg(a) || "$";
+          return isNaN(n) ? String(v ?? "") : c + n.toFixed(2);
+        }
+      ],
+      [
+        "date",
+        function(v, a) {
+          var d = new Date(v);
+          return isNaN(d.getTime()) ? "" : d.toLocaleDateString(strArg(a) || void 0);
+        }
+      ],
+      [
+        "default",
+        function(v, a) {
+          return v === null || v === void 0 || v === "" ? strArg(a) : v;
+        }
+      ],
+      [
+        "join",
+        function(v, a) {
+          return Array.isArray(v) ? v.join(a === "" ? ", " : strArg(a)) : v;
+        }
+      ],
+      [
+        "length",
+        function(v) {
+          return v == null ? 0 : v.length === void 0 ? 0 : v.length;
+        }
+      ]
     ].forEach(function(p) {
       filters.set(p[0], p[1]);
     });
@@ -920,7 +978,8 @@
       for (var i = 0; i < chain.length; i++) {
         var fn = filters.get(chain[i][0]);
         if (typeof fn !== "function") {
-          if (DEV && typeof console !== "undefined") console.warn('[laghu] unknown filter "' + chain[i][0] + '"');
+          if (DEV && typeof console !== "undefined")
+            console.warn('[laghu] unknown filter "' + chain[i][0] + '"');
           continue;
         }
         try {
@@ -974,7 +1033,8 @@
               if (v === false || v === null || v === void 0) el.removeAttribute(attr);
               else if (URL_ATTRS[attr.toLowerCase()] && unsafeUrl(v)) {
                 el.removeAttribute(attr);
-                if (DEV && typeof console !== "undefined") console.warn('[laghu] blocked scriptable URL for "' + attr + '"');
+                if (DEV && typeof console !== "undefined")
+                  console.warn('[laghu] blocked scriptable URL for "' + attr + '"');
               } else el.setAttribute(attr, String(v));
             });
             onCleanup(el, stop);
@@ -1114,7 +1174,8 @@
         if (claimed(tpl, "tfor")) return;
         var mm = spec.match(/^\s*(\w+)(?:\s*,\s*(\w+))?\s+in\s+(.+)\s*$/);
         if (!mm) {
-          if (DEV && typeof console !== "undefined") console.warn('[laghu] bad data-for "' + spec + '"');
+          if (DEV && typeof console !== "undefined")
+            console.warn('[laghu] bad data-for "' + spec + '"');
           return;
         }
         var itemVar = mm[1];
@@ -1127,7 +1188,8 @@
         var render = function() {
           var list = evalExpr(scope, listExpr) || [];
           if (!Array.isArray(list)) {
-            if (DEV && typeof console !== "undefined") console.warn("[laghu] data-for not array: " + listExpr);
+            if (DEV && typeof console !== "undefined")
+              console.warn("[laghu] data-for not array: " + listExpr);
             list = [];
           }
           var parent = anchor.parentNode;
@@ -1266,9 +1328,14 @@
           var el = node;
           if (claimed(el, "dir:" + name)) return;
           try {
-            var out = fn({ el, get: function() {
-              return evalExpr(scope, el.getAttribute("data-" + name) || "");
-            }, effect, scope });
+            var out = fn({
+              el,
+              get: function() {
+                return evalExpr(scope, el.getAttribute("data-" + name) || "");
+              },
+              effect,
+              scope
+            });
             if (typeof out === "function") onCleanup(el, out);
           } catch (e) {
             reportError(e);
@@ -1295,8 +1362,10 @@
           method = "DELETE";
           url = el.getAttribute("data-delete") || "";
         }
-        if (!url && !el.hasAttribute("data-get") && !el.hasAttribute("data-post") && !el.hasAttribute("data-put") && !el.hasAttribute("data-patch") && !el.hasAttribute("data-delete")) return;
-        if (el.hasAttribute("data-method")) method = String(el.getAttribute("data-method") || method).toUpperCase();
+        if (!url && !el.hasAttribute("data-get") && !el.hasAttribute("data-post") && !el.hasAttribute("data-put") && !el.hasAttribute("data-patch") && !el.hasAttribute("data-delete"))
+          return;
+        if (el.hasAttribute("data-method"))
+          method = String(el.getAttribute("data-method") || method).toUpperCase();
         if (!method) method = "GET";
         if (claimed(el, "fetch")) return;
         setupFetch(el, scope, method, url, actions);
@@ -1314,7 +1383,8 @@
       }
       if (!hasErr) setPath(scope, "$error", null);
       var fire = function(e) {
-        if (el instanceof HTMLFormElement && e && e.type === "submit" && e.cancelable) e.preventDefault();
+        if (el instanceof HTMLFormElement && e && e.type === "submit" && e.cancelable)
+          e.preventDefault();
         doFetch(el, scope, method, url, targetSel, swap);
       };
       bindTrigger(el, triggerSpec, fire);
@@ -1373,12 +1443,20 @@
         }
       };
       setBusy(true);
-      var before = new CustomEvent("laghu:before-request", { bubbles: true, cancelable: true, detail: { url, method } });
+      var before = new CustomEvent("laghu:before-request", {
+        bubbles: true,
+        cancelable: true,
+        detail: { url, method }
+      });
       if (!el.dispatchEvent(before)) {
         finish();
         return;
       }
-      var opts = { method, headers: { Accept: "application/json, text/html" }, signal: ctrl ? ctrl.signal : void 0 };
+      var opts = {
+        method,
+        headers: { Accept: "application/json, text/html" },
+        signal: ctrl ? ctrl.signal : void 0
+      };
       var valsRaw = el.getAttribute("data-vals");
       var body = null;
       if (valsRaw) {
@@ -1429,18 +1507,30 @@
       }
       fetch(url, opts).then(function(res) {
         finish();
-        el.dispatchEvent(new CustomEvent("laghu:after-request", { bubbles: true, detail: { status: res.status, url } }));
+        el.dispatchEvent(
+          new CustomEvent("laghu:after-request", {
+            bubbles: true,
+            detail: { status: res.status, url }
+          })
+        );
         if (!res.ok) {
           setPath(scope, "$error", { status: res.status, url });
-          el.dispatchEvent(new CustomEvent("laghu:request-error", { bubbles: true, detail: { status: res.status, url } }));
+          el.dispatchEvent(
+            new CustomEvent("laghu:request-error", {
+              bubbles: true,
+              detail: { status: res.status, url }
+            })
+          );
           return;
         }
         var ct = (res.headers.get("content-type") || "").toLowerCase();
-        if (ct.indexOf("json") >= 0) return res.json().then(function(data) {
-          setPath(scope, "$error", null);
-          if (data && typeof data === "object" && !Array.isArray(data)) Object.assign(scope, data);
-          else setPath(scope, "result", data);
-        });
+        if (ct.indexOf("json") >= 0)
+          return res.json().then(function(data) {
+            setPath(scope, "$error", null);
+            if (data && typeof data === "object" && !Array.isArray(data))
+              Object.assign(scope, data);
+            else setPath(scope, "result", data);
+          });
         return res.text().then(function(html) {
           var sel = el.getAttribute("data-select");
           if (sel) {
@@ -1456,8 +1546,16 @@
       }).catch(function(err) {
         finish();
         if (err && err.name === "AbortError" && !timedOut) return;
-        setPath(scope, "$error", { message: String(err && err.message || err), timeout: timedOut });
-        el.dispatchEvent(new CustomEvent("laghu:request-error", { bubbles: true, detail: { error: err, timeout: timedOut } }));
+        setPath(scope, "$error", {
+          message: String(err && err.message || err),
+          timeout: timedOut
+        });
+        el.dispatchEvent(
+          new CustomEvent("laghu:request-error", {
+            bubbles: true,
+            detail: { error: err, timeout: timedOut }
+          })
+        );
         reportError(err);
       });
     }
@@ -1477,25 +1575,38 @@
       var s = String(swap || "inner").toLowerCase();
       var s = String(swap || "inner").toLowerCase();
       if (s === "none") {
-        target.dispatchEvent(new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } }));
+        target.dispatchEvent(
+          new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } })
+        );
         return;
       }
       var focusId = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
       var ae = document.activeElement;
       var selStart = ae && typeof ae.selectionStart === "number" ? ae.selectionStart : -1;
       var selEnd = ae && typeof ae.selectionEnd === "number" ? ae.selectionEnd : -1;
-      target.dispatchEvent(new CustomEvent("laghu:before-swap", { bubbles: true, cancelable: false, detail: { swap: s } }));
+      target.dispatchEvent(
+        new CustomEvent("laghu:before-swap", {
+          bubbles: true,
+          cancelable: false,
+          detail: { swap: s }
+        })
+      );
       var isMorph = s.indexOf("morph") === 0;
       var M = typeof window !== "undefined" ? window.LaghuMorph : null;
       if (isMorph) {
         if (M && M.morph) {
           M.morph(target, sanitize(html), { mode: s === "morph:outer" ? "outer" : "inner" });
           hydrate(target, scope, actions);
-          target.dispatchEvent(new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } }));
+          target.dispatchEvent(
+            new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } })
+          );
           restoreFocus(focusId, selStart, selEnd);
           return;
         }
-        if (DEV && typeof console !== "undefined") console.warn('[laghu] data-swap="morph" needs morph.js (window.LaghuMorph). Falling back to inner.');
+        if (DEV && typeof console !== "undefined")
+          console.warn(
+            '[laghu] data-swap="morph" needs morph.js (window.LaghuMorph). Falling back to inner.'
+          );
         s = "inner";
       }
       if (s === "delete") {
@@ -1548,7 +1659,9 @@
       });
       var root = s === "outer" ? target.parentNode instanceof Element ? target.parentNode : document.body : target;
       hydrate(root, scope, actions);
-      target.dispatchEvent(new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } }));
+      target.dispatchEvent(
+        new CustomEvent("laghu:after-swap", { bubbles: true, detail: { swap: s } })
+      );
       restoreFocus(focusId, selStart, selEnd);
     }
     function restoreFocus(id, a, b) {

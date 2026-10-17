@@ -38,6 +38,7 @@ classDiagram
 ```
 
 ### Cache-Aside Implementation & Stampede Defense
+
 ```
 function getCachedOrFetch(cachePort, key, ttlSeconds, fetcher):
   cachedValue = cachePort.get(key)

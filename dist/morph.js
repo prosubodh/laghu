@@ -34,7 +34,8 @@
       return null;
     }
     function morphEl(oldEl, newEl) {
-      if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute("data-morph-skip")) return;
+      if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute("data-morph-skip"))
+        return;
       if (oldEl.tagName !== newEl.tagName) {
         oldEl.replaceWith(newEl.cloneNode(true));
         return;
@@ -126,7 +127,9 @@
         else target.replaceWith(tmp.content.cloneNode(true));
         return;
       }
-      var wrap = document.createElement(target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div");
+      var wrap = document.createElement(
+        target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div"
+      );
       wrap.appendChild(tmp.content.cloneNode(true));
       var fake = document.createElement(target.tagName);
       Array.prototype.forEach.call(target.attributes, function(at) {

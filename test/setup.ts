@@ -1,7 +1,7 @@
 // Shared Vitest setup: expose the Laghu global the plugins and app
 // scripts expect, and give every test a clean document.
-import { beforeEach } from 'vite-plus/test';
-import { Laghu } from '../src/laghu';
+import { beforeEach } from "vite-plus/test";
+import { Laghu } from "../src/laghu";
 
 declare global {
   // Test convenience: every element under test is an HTMLElement in
@@ -10,9 +10,9 @@ declare global {
     click(): void;
   }
 }
-import { LaghuMorph } from '../src/morph';
-import { LaghuRouter } from '../src/router';
-import { LaghuValidate } from '../src/validate';
+import { LaghuMorph } from "../src/morph";
+import { LaghuRouter } from "../src/router";
+import { LaghuValidate } from "../src/validate";
 
 // Plugins and demo-app scripts read globals off window, so publish
 // the module singletons the same way the IIFE bundles do.
@@ -26,7 +26,7 @@ export function tick(ms = 10): Promise<void> {
 }
 
 beforeEach(() => {
-  document.body.innerHTML = '';
+  document.body.innerHTML = "";
 });
 
 export { Laghu };

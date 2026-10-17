@@ -9,6 +9,7 @@
 Depending on whether the project target is a **Fullstack Web SaaS** (Frontend + Backend) or a **Headless Service** (API only), projects follow these standard layouts:
 
 ### Fullstack Web SaaS Topology (Web Frontend + Hexagonal Backend)
+
 ```
 <project-root>/
 ├── .agents/skills/                   # Specialized agentic workflows (carried from azcodr template)
@@ -54,6 +55,7 @@ Depending on whether the project target is a **Fullstack Web SaaS** (Frontend + 
 ```
 
 ### Headless Service Topology (Backend API Only)
+
 ```
 <project-root>/
 ├── .agents/skills/                   # Specialized agentic workflows
@@ -71,6 +73,7 @@ Depending on whether the project target is a **Fullstack Web SaaS** (Frontend + 
 ## 2. Language-Specific Source Layouts
 
 ### TypeScript Fullstack Scaffold (`client/` + `src/` via `package.json` / `pnpm`)
+
 ```
 client/                               # Web Frontend (Vite + React / Vue / Svelte)
 ├── src/
@@ -94,6 +97,7 @@ src/                                  # Core Backend (Hexagonal Ports & Adapters
 ```
 
 ### Go Scaffold (`go.mod`)
+
 ```
 src/
 ├── domain/
@@ -108,6 +112,7 @@ src/
 ```
 
 ### Rust Scaffold (`Cargo.toml`)
+
 ```
 src/
 ├── domain/
@@ -122,6 +127,7 @@ src/
 ```
 
 ### Python Scaffold (`pyproject.toml` / `uv`)
+
 ```
 src/
 ├── domain/
@@ -136,6 +142,7 @@ src/
 ```
 
 ### TypeScript Backend-Only Scaffold (`package.json` / `pnpm`)
+
 ```
 src/
 ├── domain/

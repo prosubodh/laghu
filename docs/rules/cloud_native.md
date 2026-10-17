@@ -23,6 +23,7 @@
 ## 3. Disposability & Graceful Shutdown
 
 All application processes and containers must handle graceful termination:
+
 - Trap operating system `SIGTERM` and `SIGINT` signals.
 - Cease accepting new inbound HTTP/gRPC requests immediately upon signal receipt.
 - Drain active, in-flight connections within a bounded timeout window (e.g. 10 seconds).

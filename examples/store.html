@@ -1,23 +1,27 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - shared store</title>
-<div data-scope='{}' id="a">
+<div data-scope="{}" id="a">
   <p>Cart A: <span data-bind="$store.cart.count"></span></p>
   <button data-click="inc">add</button>
   <button data-click="dec">remove</button>
 </div>
-<div data-scope='{}' id="b">
+<div data-scope="{}" id="b">
   <p>Cart B: <span data-bind="$store.cart.count"></span></p>
-  <label>Name <input data-model="$store.cart.name"></label>
+  <label>Name <input data-model="$store.cart.name" /></label>
   <p>Hello, <span data-bind="$store.cart.name"></span></p>
 </div>
 <script src="../dist/laghu.min.js"></script>
 <script>
-  Laghu.store('cart', { count: 0, name: 'Ada' });
+  Laghu.store("cart", { count: 0, name: "Ada" });
   var actions = {
-    inc: function () { Laghu.store('cart').count++; },
-    dec: function () { Laghu.store('cart').count--; }
+    inc: function () {
+      Laghu.store("cart").count++;
+    },
+    dec: function () {
+      Laghu.store("cart").count--;
+    },
   };
-  Laghu.hydrate(document.querySelector('#a'), {}, actions);
-  Laghu.hydrate(document.querySelector('#b'), {}, actions);
+  Laghu.hydrate(document.querySelector("#a"), {}, actions);
+  Laghu.hydrate(document.querySelector("#b"), {}, actions);
 </script>

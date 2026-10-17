@@ -9,9 +9,7 @@
 export function stripHtmlComments(text) {
   // Remove HTML comments, tolerating unclosed ones. A stray `<!--` from an
   // editor's "comment selection" must not silently hide every ADR after it.
-  return text
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<!--[\s\S]*$/, '');
+  return text.replace(/<!--[\s\S]*?-->/g, "").replace(/<!--[\s\S]*$/, "");
 }
 
 /**
@@ -21,7 +19,7 @@ export function stripHtmlComments(text) {
  * `#### ADR-001` shown as an example is counted as a real decision.
  */
 export function stripFencedCode(text) {
-  return text.replace(/^([ \t]*)(```|~~~)[\s\S]*?^\1\2[ \t]*$/gm, '');
+  return text.replace(/^([ \t]*)(```|~~~)[\s\S]*?^\1\2[ \t]*$/gm, "");
 }
 
 export default { stripHtmlComments, stripFencedCode };

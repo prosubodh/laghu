@@ -1,3 +1,3 @@
-import { LaghuValidate } from './validate';
+import { LaghuValidate } from "./validate";
 
 (window as any).LaghuValidate = LaghuValidate;

@@ -39,7 +39,10 @@
  */
 export interface LaghuRoute {
   path: string;
-  render: (params: Record<string, string>, to: { path: string; params: Record<string, string> }) => string;
+  render: (
+    params: Record<string, string>,
+    to: { path: string; params: Record<string, string> },
+  ) => string;
 }
 
 export interface LaghuRouterOptions {
@@ -48,8 +51,14 @@ export interface LaghuRouterOptions {
   actions?: Record<string, Function>;
   routes?: LaghuRoute[];
   notfound?: (to: { path: string; params: Record<string, string> }) => string;
-  beforeEach?: (to: { path: string; params: Record<string, string> }, from: { path: string; params: Record<string, string> }) => boolean | void;
-  afterEach?: (to: { path: string; params: Record<string, string> }, from: { path: string; params: Record<string, string> }) => void;
+  beforeEach?: (
+    to: { path: string; params: Record<string, string> },
+    from: { path: string; params: Record<string, string> },
+  ) => boolean | void;
+  afterEach?: (
+    to: { path: string; params: Record<string, string> },
+    from: { path: string; params: Record<string, string> },
+  ) => void;
 }
 
 export interface LaghuRouterAPI {
@@ -58,7 +67,12 @@ export interface LaghuRouterAPI {
   compile(pattern: string): (path: string) => Record<string, string> | null;
   current(): { path: string; params: Record<string, string> };
   navigate(path: string): void;
-  afterEach(fn: (to: { path: string; params: Record<string, string> }, from: { path: string; params: Record<string, string> }) => void): void;
+  afterEach(
+    fn: (
+      to: { path: string; params: Record<string, string> },
+      from: { path: string; params: Record<string, string> },
+    ) => void,
+  ): void;
 }
 
 declare global {
@@ -68,8 +82,8 @@ declare global {
 }
 
 export const LaghuRouter: LaghuRouterAPI = (() => {
-  'use strict';
-  var current: any = { path: '', params: {} };
+  "use strict";
+  var current: any = { path: "", params: {} };
   var afterEachFns: Array<Function> = [];
 
   /**
@@ -80,17 +94,26 @@ export const LaghuRouter: LaghuRouterAPI = (() => {
    */
   function compile(pattern: string) {
     var names: Array<string> = [];
-    var src = String(pattern).split('/').map(function (seg: any) {
-      if (seg.charAt(0) === ':') { names.push(seg.slice(1)); return '([^/]+)'; }
-      if (seg === '*') { names.push('wild'); return '(.*)'; }
-      return seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }).join('/');
-    var re = new RegExp('^' + src + '$');
+    var src = String(pattern)
+      .split("/")
+      .map(function (seg: any) {
+        if (seg.charAt(0) === ":") {
+          names.push(seg.slice(1));
+          return "([^/]+)";
+        }
+        if (seg === "*") {
+          names.push("wild");
+          return "(.*)";
+        }
+        return seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      })
+      .join("/");
+    var re = new RegExp("^" + src + "$");
     return function (path: any) {
       var m = path.match(re);
       if (!m) return null;
       var out: Record<string, string> = {};
-      for (var i = 0; i < names.length; i++) out[names[i]] = decodeURIComponent(m[i + 1] || '');
+      for (var i = 0; i < names.length; i++) out[names[i]] = decodeURIComponent(m[i + 1] || "");
       return out;
     };
   }
@@ -102,7 +125,7 @@ export const LaghuRouter: LaghuRouterAPI = (() => {
    */
   function route(opts: any) {
     opts = opts || {};
-    var targetSel = opts.target || '#view';
+    var targetSel = opts.target || "#view";
     var scope = opts.scope || {};
     var actions = opts.actions || {};
     var compiled = (opts.routes || []).map(function (r: any) {
@@ -113,92 +136,117 @@ export const LaghuRouter: LaghuRouterAPI = (() => {
     // not survive to the second navigation. Cached HTML re-renders
     // through the normal swap path (sanitize, preserve, hydrate).
     function tplHtml(tpl: Element): string {
-      var holder = document.createElement('div');
+      var holder = document.createElement("div");
       holder.appendChild((tpl as HTMLTemplateElement).content.cloneNode(true));
       return holder.innerHTML;
     }
-    var declRoutes: Array<{ match: (path: string) => Record<string, string> | null; guard: string; html: string }> = [];
-    var declNotfound = '';
-    if (typeof document !== 'undefined') {
+    var declRoutes: Array<{
+      match: (path: string) => Record<string, string> | null;
+      guard: string;
+      html: string;
+    }> = [];
+    var declNotfound = "";
+    if (typeof document !== "undefined") {
       var host = document.querySelector(targetSel);
       if (host) {
-        Array.prototype.forEach.call(host.querySelectorAll('template[data-route]'), function (tpl: Element) {
-          declRoutes.push({
-            match: compile(tpl.getAttribute('data-route') || ''),
-            guard: tpl.getAttribute('data-route-if') || '',
-            html: tplHtml(tpl)
-          });
-        });
-        var nf = host.querySelector('template[data-route-notfound]');
+        Array.prototype.forEach.call(
+          host.querySelectorAll("template[data-route]"),
+          function (tpl: Element) {
+            declRoutes.push({
+              match: compile(tpl.getAttribute("data-route") || ""),
+              guard: tpl.getAttribute("data-route-if") || "",
+              html: tplHtml(tpl),
+            });
+          },
+        );
+        var nf = host.querySelector("template[data-route-notfound]");
         if (nf) declNotfound = tplHtml(nf);
       }
     }
     function render() {
-      var hash = (typeof location !== 'undefined' && location.hash) || '#/';
-      var pathOnly = hash.charAt(0) === '#' ? hash.slice(1) : hash;
-      if (!pathOnly) pathOnly = '/';
+      var hash = (typeof location !== "undefined" && location.hash) || "#/";
+      var pathOnly = hash.charAt(0) === "#" ? hash.slice(1) : hash;
+      if (!pathOnly) pathOnly = "/";
       var from = current;
-      var B = (typeof window !== 'undefined' && ((window) as any).Laghu) || null;
-      var target = typeof document !== 'undefined' ? document.querySelector(targetSel) : null;
+      var B = (typeof window !== "undefined" && (window as any).Laghu) || null;
+      var target = typeof document !== "undefined" ? document.querySelector(targetSel) : null;
       // Declarative routes win over render functions: params bind into
       // a child scope, guards are plain expressions on data-route-if.
       var declHit: { guard: string; html: string; params: Record<string, string> } | null = null;
       for (var d = 0; d < declRoutes.length; d++) {
         var pm = declRoutes[d].match(pathOnly);
-        if (pm) { declHit = { guard: declRoutes[d].guard, html: declRoutes[d].html, params: pm }; break; }
+        if (pm) {
+          declHit = { guard: declRoutes[d].guard, html: declRoutes[d].html, params: pm };
+          break;
+        }
       }
-      var i, params: Record<string, string> | null = null, hit = null;
+      var i,
+        params: Record<string, string> | null = null,
+        hit = null;
       if (!declHit) {
         for (i = 0; i < compiled.length; i++) {
           params = compiled[i].match(pathOnly);
-          if (params) { hit = compiled[i]; break; }
+          if (params) {
+            hit = compiled[i];
+            break;
+          }
         }
       } else {
         params = declHit.params;
       }
       var to = { path: pathOnly, params: params || {} };
-      if (typeof opts.beforeEach === 'function' && opts.beforeEach(to, from) === false) return;
+      if (typeof opts.beforeEach === "function" && opts.beforeEach(to, from) === false) return;
       if (declHit && declHit.guard && B && !B.eval(scope, declHit.guard)) return;
       current = to;
       if (declHit && B && target) {
         var child = B.scope ? B.scope(scope, { params: to.params }) : scope;
-        B.swap(target, declHit.html, 'inner', child, actions);
+        B.swap(target, declHit.html, "inner", child, actions);
       } else {
-        var html = '';
+        var html = "";
         try {
-          if (hit) html = hit.render(params, to) || '';
-          else if (typeof opts.notfound === 'function') html = opts.notfound(to) || '';
+          if (hit) html = hit.render(params, to) || "";
+          else if (typeof opts.notfound === "function") html = opts.notfound(to) || "";
           else html = declNotfound;
         } catch (e) {
-          if (typeof console !== 'undefined') console.error('[laghu-router]', e);
+          if (typeof console !== "undefined") console.error("[laghu-router]", e);
           return;
         }
-        if (B && target) B.swap(target, String(html), 'inner', scope, actions);
+        if (B && target) B.swap(target, String(html), "inner", scope, actions);
       }
-      if (typeof opts.afterEach === 'function') {
-        try { opts.afterEach(to, from); } catch (e) {}
+      if (typeof opts.afterEach === "function") {
+        try {
+          opts.afterEach(to, from);
+        } catch (e) {}
       }
       for (var k = 0; k < afterEachFns.length; k++) {
-        try { afterEachFns[k](to, from); } catch (e) {}
+        try {
+          afterEachFns[k](to, from);
+        } catch (e) {}
       }
     }
-    function onHash() { render(); }
-    if (typeof window !== 'undefined') window.addEventListener('hashchange', onHash);
+    function onHash() {
+      render();
+    }
+    if (typeof window !== "undefined") window.addEventListener("hashchange", onHash);
     render();
     return function () {
-      if (typeof window !== 'undefined') window.removeEventListener('hashchange', onHash);
+      if (typeof window !== "undefined") window.removeEventListener("hashchange", onHash);
     };
   }
 
   var api: LaghuRouterAPI = {
-    version: '1.1.0',
+    version: "1.1.0",
     route: route,
     compile: compile,
-    current: function () { return current; },
-    navigate: function (path: string) {
-      if (typeof location !== 'undefined') location.hash = '#' + path;
+    current: function () {
+      return current;
     },
-    afterEach: function (fn: Function) { afterEachFns.push(fn); }
+    navigate: function (path: string) {
+      if (typeof location !== "undefined") location.hash = "#" + path;
+    },
+    afterEach: function (fn: Function) {
+      afterEachFns.push(fn);
+    },
   };
   return api;
 })();

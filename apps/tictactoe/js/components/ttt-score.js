@@ -6,14 +6,14 @@
  *     X <span data-bind="score.X"></span>
  *   </ttt-score>
  */
-Laghu.define('ttt-score', function () {
-  var store = Laghu.store('ttt');
+Laghu.define("ttt-score", function () {
+  var store = Laghu.store("ttt");
   return {
     state: store,
     actions: {
       resetAll: function () {
         TttStore.resetAll(store);
-      }
-    }
+      },
+    },
   };
 });

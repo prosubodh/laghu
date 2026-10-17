@@ -40,10 +40,14 @@
         else if (val !== "") {
           if (r.name === "email" && !EMAIL.test(val)) msg = name + " must be an email";
           else if (r.name === "number" && isNaN(Number(val))) msg = name + " must be a number";
-          else if (r.name === "min" && val.length < Number(r.arg)) msg = name + " needs at least " + r.arg + " characters";
-          else if (r.name === "max" && val.length > Number(r.arg)) msg = name + " needs at most " + r.arg + " characters";
-          else if (r.name === "minv" && Number(val) < Number(r.arg)) msg = name + " must be at least " + r.arg;
-          else if (r.name === "maxv" && Number(val) > Number(r.arg)) msg = name + " must be at most " + r.arg;
+          else if (r.name === "min" && val.length < Number(r.arg))
+            msg = name + " needs at least " + r.arg + " characters";
+          else if (r.name === "max" && val.length > Number(r.arg))
+            msg = name + " needs at most " + r.arg + " characters";
+          else if (r.name === "minv" && Number(val) < Number(r.arg))
+            msg = name + " must be at least " + r.arg;
+          else if (r.name === "maxv" && Number(val) > Number(r.arg))
+            msg = name + " must be at most " + r.arg;
           else if (r.name === "match") {
             var form = ownerForm(el);
             var other = form ? form.querySelector('[name="' + r.arg.replace(/"/g, "") + '"]') : null;

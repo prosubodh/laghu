@@ -4,13 +4,13 @@
  * solver confirms a unique solution. Errors surface through duplicate
  * detection, so casual play never flags a valid alternate path wrong. */
 var SudokuLib = (function () {
-  'use strict';
+  "use strict";
 
   function mulberry32(seed) {
     var a = seed >>> 0;
     return function () {
       a |= 0;
-      a = (a + 0x6D2B79F5) | 0;
+      a = (a + 0x6d2b79f5) | 0;
       var t = Math.imul(a ^ (a >>> 15), 1 | a);
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -21,7 +21,9 @@ var SudokuLib = (function () {
     var a = arr.slice();
     for (var i = a.length - 1; i > 0; i--) {
       var j = Math.floor(rand() * (i + 1));
-      var t = a[i]; a[i] = a[j]; a[j] = t;
+      var t = a[i];
+      a[i] = a[j];
+      a[j] = t;
     }
     return a;
   }
@@ -39,8 +41,12 @@ var SudokuLib = (function () {
   function shuffleSolution(sol, seed) {
     var rand = mulberry32(seed);
     var g = sol.slice();
-    function row(r) { return g.slice(r * 9, r * 9 + 9); }
-    function setRow(r, vals) { for (var c = 0; c < 9; c++) g[r * 9 + c] = vals[c]; }
+    function row(r) {
+      return g.slice(r * 9, r * 9 + 9);
+    }
+    function setRow(r, vals) {
+      for (var c = 0; c < 9; c++) g[r * 9 + c] = vals[c];
+    }
     var bands = shuffled([0, 1, 2], rand);
     var out = [];
     for (var b = 0; b < 3; b++) {
@@ -61,11 +67,14 @@ var SudokuLib = (function () {
       for (var c3 = 0; c3 < 9; c3++) g2.push(g[r2 * 9 + cols[c3]]);
     }
     var perm = shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9], rand);
-    return g2.map(function (v) { return perm[v - 1]; });
+    return g2.map(function (v) {
+      return perm[v - 1];
+    });
   }
 
   function peersOf(i) {
-    var r = (i / 9) | 0, c = i % 9;
+    var r = (i / 9) | 0,
+      c = i % 9;
     var set = {};
     for (var k = 0; k < 9; k++) {
       set[r * 9 + k] = 1;
@@ -90,12 +99,16 @@ var SudokuLib = (function () {
   }
 
   function countSolutions(grid, limit) {
-    var best = -1, bestCands = null;
+    var best = -1,
+      bestCands = null;
     for (var i = 0; i < 81; i++) {
       if (!grid[i]) {
         var c = candidates(grid, i);
         if (!c.length) return 0;
-        if (!bestCands || c.length < bestCands.length) { best = i; bestCands = c; }
+        if (!bestCands || c.length < bestCands.length) {
+          best = i;
+          bestCands = c;
+        }
       }
     }
     if (best < 0) return 1;
@@ -136,18 +149,24 @@ var SudokuLib = (function () {
       for (var k = 0; k < indices.length; k++) {
         var v = cells[indices[k]];
         if (!v) continue;
-        if (seen[v] !== undefined) { bad[indices[k]] = true; bad[seen[v]] = true; }
-        else seen[v] = indices[k];
+        if (seen[v] !== undefined) {
+          bad[indices[k]] = true;
+          bad[seen[v]] = true;
+        } else seen[v] = indices[k];
       }
     }
     for (var r = 0; r < 9; r++) {
-      var row = [], col = [], box = [];
+      var row = [],
+        col = [],
+        box = [];
       for (var c = 0; c < 9; c++) {
         row.push(r * 9 + c);
         col.push(c * 9 + r);
         box.push(((r / 3) | 0) * 27 + (r % 3) * 3 + ((c / 3) | 0) * 9 + (c % 3));
       }
-      markDup(row); markDup(col); markDup(box);
+      markDup(row);
+      markDup(col);
+      markDup(box);
     }
     return bad;
   }
@@ -164,6 +183,6 @@ var SudokuLib = (function () {
     conflicts: conflicts,
     isComplete: isComplete,
     countSolutions: countSolutions,
-    HOLES: HOLES
+    HOLES: HOLES,
   };
 })();

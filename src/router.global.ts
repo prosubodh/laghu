@@ -1,3 +1,3 @@
-import { LaghuRouter } from './router';
+import { LaghuRouter } from "./router";
 
 (window as any).LaghuRouter = LaghuRouter;

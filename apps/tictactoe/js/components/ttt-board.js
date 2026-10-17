@@ -13,18 +13,18 @@
  *     </div>
  *   </ttt-board>
  */
-Laghu.define('ttt-board', function () {
-  var store = Laghu.store('ttt');
+Laghu.define("ttt-board", function () {
+  var store = Laghu.store("ttt");
   return {
     state: store,
     actions: {
       place: function () {
-        var i = Laghu.get(this, 'i');
+        var i = Laghu.get(this, "i");
         TttStore.place(store, i);
       },
       newRound: function () {
         TttStore.newRound(store);
-      }
-    }
+      },
+    },
   };
 });

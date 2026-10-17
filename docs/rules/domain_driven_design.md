@@ -27,12 +27,14 @@ flowchart TD
     ProblemSpace -->|Shapes & Dictates| SolutionSpace
 ```
 
-- **The Problem Space (The Essence - Fred Brooks):** Concerns *what* problem is being solved, the entities, state transitions, and operational constraints (e.g. 16.6ms frame budget for games, zero-install browser sandbox for extensions, or ACID compliance for banking). **Zero technology, stack, or database choices are permitted in the Problem Space.**
-- **The Solution Space (The Accidents):** Concerns *how* the system is realized. Runtimes, programming languages (C, Rust, TS, Go, Java), and storage engines are **emergent outputs** derived strictly from Problem Space constraints.
+- **The Problem Space (The Essence - Fred Brooks):** Concerns _what_ problem is being solved, the entities, state transitions, and operational constraints (e.g. 16.6ms frame budget for games, zero-install browser sandbox for extensions, or ACID compliance for banking). **Zero technology, stack, or database choices are permitted in the Problem Space.**
+- **The Solution Space (The Accidents):** Concerns _how_ the system is realized. Runtimes, programming languages (C, Rust, TS, Go, Java), and storage engines are **emergent outputs** derived strictly from Problem Space constraints.
 - **The Golden Hammer Anti-Pattern:** Selecting tools (e.g., "Let's use Next.js and PostgreSQL") before mapping problem constraints forces the domain to fit the tool, creating massive accidental complexity.
 
 ### Strategic Subdomain & Capability Mapping
+
 Structure enterprise business capabilities into three distinct tiers:
+
 1. **Core Subdomain / Capabilities**: Proprietary value drivers and business differentiators (e.g. specialized workflow engines, dynamic pricing algorithms). Allocate 80% of architectural effort here.
 2. **Supporting Subdomain / Capabilities**: Business functions specific to the domain but not competitive differentiators (e.g. order tracking, invoice rendering).
 3. **Generic Subdomain / Capabilities**: Standard commoditized software (e.g. authentication, audit logging, email transport). Rely exclusively on standard open-source libraries.
@@ -44,10 +46,11 @@ Structure enterprise business capabilities into three distinct tiers:
 The fundamental premise of Domain-Driven Design (Eric Evans) is that **the code is the model, and the model is the code**. Any divergence between the mental model of domain experts and the source code is called **Linguistic Drift**.
 
 ### Principles of Linguistic Alignment
+
 1. **Zero Synonyms (The Single Name Rule)**: Every domain concept has exactly one authoritative term. Synonyms (e.g. `Client` vs `User`, `Account` vs `Organization`, `Contract` vs `Agreement`) are strictly forbidden across code, tests, and user interfaces.
 2. **Eliminate Technical Jargon from Domain Core**: Domain models must not leak technical implementation terms (e.g. `UserRecord`, `TenantRow`, `DataDTO`, `IsActiveFlag`). The domain language must be pure business vocabulary.
 3. **Contextual Isolation**: When a single English word has multiple meanings across business units, split the terms or isolate them within dedicated Bounded Contexts:
-   - *Example*: In multi-tenant infrastructure, a system isolation boundary is an **Organization** / **Tenant Workspace**. In application operations, a participant is a **Member**, **User**, or **Customer**. Using "Tenant" for both creates semantic ambiguity and catastrophic bugs.
+   - _Example_: In multi-tenant infrastructure, a system isolation boundary is an **Organization** / **Tenant Workspace**. In application operations, a participant is a **Member**, **User**, or **Customer**. Using "Tenant" for both creates semantic ambiguity and catastrophic bugs.
 
 ---
 
@@ -56,7 +59,9 @@ The fundamental premise of Domain-Driven Design (Eric Evans) is that **the code 
 Every project must maintain an authoritative, version-controlled **Living Ubiquitous Language Glossary** at [`docs/knowledge/ubiquitous_language.md`](../knowledge/ubiquitous_language.md).
 
 ### Structure of a Glossary Entry
+
 Each entry must define:
+
 - **Canonical Term**: The agreed domain name.
 - **Definition**: The business meaning agreed with stakeholders.
 - **Bounded Context**: The domain subsystem where this definition holds authority.
@@ -70,7 +75,9 @@ Each entry must define:
 To prevent linguistic drift over time, teams must employ mechanical enforcement:
 
 ### 1. Static Analysis / Linter Rules
+
 Configure custom linter rules (e.g. ESLint `id-denylist` or custom AST rules) to forbid banned synonyms in identifiers:
+
 ```json
 {
   "rules": {
@@ -80,7 +87,9 @@ Configure custom linter rules (e.g. ESLint `id-denylist` or custom AST rules) to
 ```
 
 ### 2. Branded Nominal Types
+
 Prevent "Primitive Obsession" where generic strings or IDs are conflated across domain boundaries:
+
 ```typescript
 export type UserId = string & { readonly __brand: unique symbol };
 export type OrganizationId = string & { readonly __brand: unique symbol };
@@ -91,6 +100,7 @@ function assignUserToOrder(orderId: OrderId, userId: UserId): void { ... }
 ```
 
 ### 3. Living Executable Specifications (Gherkin BDD)
+
 Acceptance criteria must be written strictly in Ubiquitous Language, serving as executable contracts that verify domain terminology in automated test runners.
 
 ---
@@ -108,12 +118,12 @@ Acceptance criteria must be written strictly in Ubiquitous Language, serving as 
 
        submit(): Result<void, DomainError> {
          if (this.order.items.length === 0) {
-           return err(new DomainError('Cannot submit empty order'));
+           return err(new DomainError("Cannot submit empty order"));
          }
-         if (this.order.status !== 'DRAFT') {
-           return err(new DomainError('Order already submitted'));
+         if (this.order.status !== "DRAFT") {
+           return err(new DomainError("Order already submitted"));
          }
-         this.order.status = 'SUBMITTED';
+         this.order.status = "SUBMITTED";
          return ok(undefined);
        }
      }

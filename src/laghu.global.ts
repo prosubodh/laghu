@@ -1,3 +1,3 @@
-import { Laghu } from './laghu';
+import { Laghu } from "./laghu";
 
 (window as any).Laghu = Laghu;

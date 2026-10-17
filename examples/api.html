@@ -1,20 +1,31 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - third-party APIs (GitHub first)</title>
-<p>This page calls public third-party APIs straight from markup. No
-backend of your own, no handwritten fetch. Open it from disk; both
-APIs below allow cross-origin reads.</p>
+<p>
+  This page calls public third-party APIs straight from markup. No backend of your own, no
+  handwritten fetch. Open it from disk; both APIs below allow cross-origin reads.
+</p>
 
-<div data-scope='{"full_name":"-","description":"","stargazers_count":0,"forks_count":0,"open_issues_count":0,"pushed_at":""}'>
+<div
+  data-scope='{"full_name":"-","description":"","stargazers_count":0,"forks_count":0,"open_issues_count":0,"pushed_at":""}'
+>
   <h2>Repository card (one object merges into state)</h2>
-  <button data-get="https://api.github.com/repos/prosubodh/laghu" data-trigger="load" data-indicator="#repo-spin">Reload repo</button>
+  <button
+    data-get="https://api.github.com/repos/prosubodh/laghu"
+    data-trigger="load"
+    data-indicator="#repo-spin"
+  >
+    Reload repo
+  </button>
   <span id="repo-spin" hidden>loading...</span>
   <div id="repo">
     <p><strong data-bind="full_name">-</strong></p>
     <p data-bind="description"></p>
-    <p>stars <span data-bind="stargazers_count">0</span>,
-      forks <span data-bind="forks_count">0</span>,
-      open issues <span data-bind="open_issues_count">0</span></p>
+    <p>
+      stars <span data-bind="stargazers_count">0</span>, forks
+      <span data-bind="forks_count">0</span>, open issues
+      <span data-bind="open_issues_count">0</span>
+    </p>
     <p>pushed <span data-bind="pushed_at"></span></p>
   </div>
   <p data-show="$error">failed: <span data-bind="$error.message"></span></p>
@@ -22,11 +33,20 @@ APIs below allow cross-origin reads.</p>
 
 <div data-scope='{"result":[]}'>
   <h2>Contributors (an array lands in result)</h2>
-  <button data-get="https://api.github.com/repos/prosubodh/laghu/contributors" data-trigger="load" data-indicator="#con-spin">Reload list</button>
+  <button
+    data-get="https://api.github.com/repos/prosubodh/laghu/contributors"
+    data-trigger="load"
+    data-indicator="#con-spin"
+  >
+    Reload list
+  </button>
   <span id="con-spin" hidden>loading...</span>
   <ul>
     <template data-for="c in result" data-key="id">
-      <li><img data-bind:src="c.avatar_url" width="24" height="24" alt=""> <span data-bind="c.login"></span> (<span data-bind="c.contributions"></span>)</li>
+      <li>
+        <img data-bind:src="c.avatar_url" width="24" height="24" alt="" />
+        <span data-bind="c.login"></span> (<span data-bind="c.contributions"></span>)
+      </li>
     </template>
   </ul>
   <p data-show="result.length === 0">no contributors loaded yet.</p>
@@ -34,25 +54,33 @@ APIs below allow cross-origin reads.</p>
 
 <form data-scope='{"result":[]}' id="postfilter">
   <h2>Posts by user (query params from a form)</h2>
-  <label>User
+  <label
+    >User
     <select name="userId">
       <option value="1">1</option>
       <option value="2">2</option>
       <option value="3">3</option>
     </select>
   </label>
-  <button type="button" data-get="https://jsonplaceholder.typicode.com/posts" data-vals="form">Load posts</button>
+  <button type="button" data-get="https://jsonplaceholder.typicode.com/posts" data-vals="form">
+    Load posts
+  </button>
   <ul>
     <template data-for="p in result" data-key="id">
-      <li><strong data-bind="p.title"></strong><br><span data-bind="p.body"></span></li>
+      <li><strong data-bind="p.title"></strong><br /><span data-bind="p.body"></span></li>
     </template>
   </ul>
 </form>
 
-<form data-post="https://jsonplaceholder.typicode.com/posts" data-target="#created" id="postform" data-scope="{}">
+<form
+  data-post="https://jsonplaceholder.typicode.com/posts"
+  data-target="#created"
+  id="postform"
+  data-scope="{}"
+>
   <h2>Create a post (JSON body from a form)</h2>
-  <label>Title <input name="title" value="hello"></label>
-  <label>Body <input name="body" value="world"></label>
+  <label>Title <input name="title" value="hello" /></label>
+  <label>Body <input name="body" value="world" /></label>
   <p><button>Send</button></p>
   <p id="created">new id: <span data-bind="id"></span></p>
 </form>

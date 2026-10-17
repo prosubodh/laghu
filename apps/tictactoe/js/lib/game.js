@@ -3,11 +3,16 @@
  * winnerOf returns null (playing), { b: 'X'|'O', line: [a,b,c] } (win),
  * or { b: 'D', line: [] } (draw). */
 var TttGame = (function () {
-  'use strict';
+  "use strict";
   var LINES = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8],
-    [0, 3, 6], [1, 4, 7], [2, 5, 8],
-    [0, 4, 8], [2, 4, 6]
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6],
   ];
 
   function winnerOf(cells) {
@@ -21,15 +26,15 @@ var TttGame = (function () {
     for (var i = 0; i < 9; i++) {
       if (!cells[i]) return null;
     }
-    return { b: 'D', line: [] };
+    return { b: "D", line: [] };
   }
 
   function statusText(store) {
     if (store.winner) {
-      if (store.winner.b === 'D') return 'Draw. New round?';
-      return 'Winner: ' + store.winner.b + '. New round?';
+      if (store.winner.b === "D") return "Draw. New round?";
+      return "Winner: " + store.winner.b + ". New round?";
     }
-    return 'Turn: ' + store.turn;
+    return "Turn: " + store.turn;
   }
 
   return { winnerOf: winnerOf, statusText: statusText, LINES: LINES };

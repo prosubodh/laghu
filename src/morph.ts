@@ -38,7 +38,7 @@ declare global {
 }
 
 export const LaghuMorph: LaghuMorphAPI = (() => {
-  'use strict';
+  "use strict";
   /**
    * Copy attributes from the new node onto the live node, remove stale
    * ones, and sync form control state without touching focused inputs.
@@ -61,13 +61,19 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
     for (var j = 0; j < an.length; j++) {
       if (!keep.has(an[j].name)) rm.push(an[j].name);
     }
-    rm.forEach(function (n: any) { a.removeAttribute(n); });
-    if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement || a instanceof HTMLSelectElement) {
-      var bv = ((b) as any).value;
-      if (bv !== undefined && ((a) as any).value !== bv && document.activeElement !== a) {
-        ((a) as any).value = bv;
+    rm.forEach(function (n: any) {
+      a.removeAttribute(n);
+    });
+    if (
+      a instanceof HTMLInputElement ||
+      a instanceof HTMLTextAreaElement ||
+      a instanceof HTMLSelectElement
+    ) {
+      var bv = (b as any).value;
+      if (bv !== undefined && (a as any).value !== bv && document.activeElement !== a) {
+        (a as any).value = bv;
       }
-      if (((b) as any).checked !== undefined) ((a) as any).checked = ((b) as any).checked;
+      if ((b as any).checked !== undefined) (a as any).checked = (b as any).checked;
     }
   }
   /**
@@ -79,9 +85,9 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
    * @returns {string|null} Key, or null when the element has none.
    */
   function keyOf(el: Element) {
-    if (el.id) return '#' + el.id;
-    var k = el.getAttribute && el.getAttribute('data-bkey');
-    if (k) return 'k:' + k;
+    if (el.id) return "#" + el.id;
+    var k = el.getAttribute && el.getAttribute("data-bkey");
+    if (k) return "k:" + k;
     return null;
   }
   /**
@@ -95,7 +101,8 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
    * @param {Element} newEl Fresh element describing the target state.
    */
   function morphEl(oldEl: Element, newEl: Element) {
-    if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute('data-morph-skip')) return;
+    if (oldEl instanceof Element && oldEl.hasAttribute && oldEl.hasAttribute("data-morph-skip"))
+      return;
     if (oldEl.tagName !== newEl.tagName) {
       oldEl.replaceWith(newEl.cloneNode(true));
       return;
@@ -112,14 +119,14 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
     var out: Node[] = [];
     newKids.forEach(function (nk: Node) {
       if (nk.nodeType === 3) {
-        if (nk.textContent !== null && nk.textContent.trim() !== '') {
+        if (nk.textContent !== null && nk.textContent.trim() !== "") {
           var t = document.createTextNode(nk.textContent);
           out.push(t);
         }
         return;
       }
       if (!(nk instanceof Element)) {
-        out.push(((nk) as Element).cloneNode(true));
+        out.push((nk as Element).cloneNode(true));
         return;
       }
       var k = keyOf(nk);
@@ -144,7 +151,10 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
         var olds = oldEl.children;
         for (var i = 0; i < olds.length; i++) {
           var oc = olds[i];
-          if (!used.has(oc) && oc.tagName === nk.tagName && !keyOf(oc)) { reuse = oc; break; }
+          if (!used.has(oc) && oc.tagName === nk.tagName && !keyOf(oc)) {
+            reuse = oc;
+            break;
+          }
         }
         if (reuse) {
           used.add(reuse);
@@ -160,7 +170,7 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
       if (c instanceof Element) {
         if (!used.has(c) && oldEl.contains(c)) {
           try {
-            var B = ((window) as any).Laghu;
+            var B = (window as any).Laghu;
             if (B && B.destroyTree) B.destroyTree(c);
           } catch (e) {}
           oldEl.removeChild(c);
@@ -169,7 +179,9 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
         oldEl.removeChild(c);
       }
     });
-    out.forEach(function (n: any) { oldEl.appendChild(n); });
+    out.forEach(function (n: any) {
+      oldEl.appendChild(n);
+    });
   }
   /**
    * Morph a target from an HTML string. Mode "inner" (default) reconciles
@@ -186,26 +198,34 @@ export const LaghuMorph: LaghuMorphAPI = (() => {
    * @param {{mode?: string}} [opts] Optional mode, "inner" or "outer".
    */
   function morph(target: Element, html: string, opts: any) {
-    var mode = (opts && opts.mode) || 'inner';
-    var tmp = document.createElement('template');
+    var mode = (opts && opts.mode) || "inner";
+    var tmp = document.createElement("template");
     tmp.innerHTML = html;
-    if (mode === 'outer') {
-      var nn = /** @type {Element} */ (tmp.content.firstElementChild || tmp.content.cloneNode(true));
+    if (mode === "outer") {
+      var nn = /** @type {Element} */ (
+        tmp.content.firstElementChild || tmp.content.cloneNode(true)
+      );
       if (nn instanceof Element && target instanceof Element) morphEl(target, nn);
       else target.replaceWith(tmp.content.cloneNode(true));
       return;
     }
-    var wrap = document.createElement(target.tagName.toLowerCase() === 'ul' || target.tagName === 'OL' ? 'ul' : 'div');
+    var wrap = document.createElement(
+      target.tagName.toLowerCase() === "ul" || target.tagName === "OL" ? "ul" : "div",
+    );
     wrap.appendChild(tmp.content.cloneNode(true));
     // morph target against wrapper: wrap children = new children
     var fake = document.createElement(target.tagName);
     // Inner mode reconciles children only. Mirror the target's own
     // attributes onto the placeholder so syncAttrs does not strip the
     // container's id/class/data-* (which would break later targeting).
-    Array.prototype.forEach.call(target.attributes, function (at: Attr) { fake.setAttribute(at.name, at.value); });
-    Array.prototype.forEach.call(wrap.childNodes, function (n: Node) { fake.appendChild(n.cloneNode(true)); });
+    Array.prototype.forEach.call(target.attributes, function (at: Attr) {
+      fake.setAttribute(at.name, at.value);
+    });
+    Array.prototype.forEach.call(wrap.childNodes, function (n: Node) {
+      fake.appendChild(n.cloneNode(true));
+    });
     morphEl(target, fake);
   }
-  var api: LaghuMorphAPI = { morph: morph, morphEl: morphEl, version: '1.0.0' };
+  var api: LaghuMorphAPI = { morph: morph, morphEl: morphEl, version: "1.0.0" };
   return api;
 })();

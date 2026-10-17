@@ -45,13 +45,16 @@
       if (typeof document !== "undefined") {
         var host = document.querySelector(targetSel);
         if (host) {
-          Array.prototype.forEach.call(host.querySelectorAll("template[data-route]"), function(tpl) {
-            declRoutes.push({
-              match: compile(tpl.getAttribute("data-route") || ""),
-              guard: tpl.getAttribute("data-route-if") || "",
-              html: tplHtml(tpl)
-            });
-          });
+          Array.prototype.forEach.call(
+            host.querySelectorAll("template[data-route]"),
+            function(tpl) {
+              declRoutes.push({
+                match: compile(tpl.getAttribute("data-route") || ""),
+                guard: tpl.getAttribute("data-route-if") || "",
+                html: tplHtml(tpl)
+              });
+            }
+          );
           var nf = host.querySelector("template[data-route-notfound]");
           if (nf) declNotfound = tplHtml(nf);
         }

@@ -37,7 +37,7 @@ flowchart TD
         I_RED["Unit Test Collaborator (RED)"]
         I_GREEN["Implement Minimal Code (GREEN)"]
         I_REF["Refactor under Green (REFACTOR)"]
-        
+
         I_RED --> I_GREEN --> I_REF
         I_REF -.->|"Next Micro-Assertion"| I_RED
     end
@@ -61,25 +61,29 @@ flowchart TD
 
 Deviating from this lifecycle introduces catastrophic defects and architectural rot:
 
-| Deviation Shortcut | Immediate Consequence | Systemic Impact |
-|---|---|---|
-| **Skipping Domain Analysis** | Hallucinated entities, missing business invariants, wrong data models. | "The Toy Prototype Blunder": Foreign key string inputs, unvalidated states, costly migrations. |
-| **Writing Code Before Tests** | Untested edge cases, unfalsifiable code, confirmation bias in test design. | Hidden bugs in production, regressions during refactoring, brittle codebases. |
-| **Skipping Outer Acceptance Tests** | In-memory unit tests pass, but user interactions and network routing fail. | "The In-Memory Supertest Illusion": App says "Offline/Connecting" while 100% unit tests pass. |
+| Deviation Shortcut                   | Immediate Consequence                                                                          | Systemic Impact                                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Skipping Domain Analysis**         | Hallucinated entities, missing business invariants, wrong data models.                         | "The Toy Prototype Blunder": Foreign key string inputs, unvalidated states, costly migrations.          |
+| **Writing Code Before Tests**        | Untested edge cases, unfalsifiable code, confirmation bias in test design.                     | Hidden bugs in production, regressions during refactoring, brittle codebases.                           |
+| **Skipping Outer Acceptance Tests**  | In-memory unit tests pass, but user interactions and network routing fail.                     | "The In-Memory Supertest Illusion": App says "Offline/Connecting" while 100% unit tests pass.           |
 | **Dropping the UI in Fullstack TDD** | Developer plunges into internal domain units, leaving the application headless with no web UI. | "The Headless Fallacy": User requests a fullstack web app but receives pure headless backend libraries. |
-| **Skipping the Refactor Phase** | Technical debt accumulates immediately behind green tests. | Code rot, duplicated logic, bloated monolithic functions (> 30 lines), violated DRY/SLAP. |
+| **Skipping the Refactor Phase**      | Technical debt accumulates immediately behind green tests.                                     | Code rot, duplicated logic, bloated monolithic functions (> 30 lines), violated DRY/SLAP.               |
 
 ---
 
 ## 4. The Batch-Test Anti-Pattern & The Incremental Nano-Cycle
 
 ### The "Test-First Waterfall" Anti-Pattern (BANNED)
+
 A rampant anti-pattern in AI coding is dumping 10–20 test cases in a single test file, and then writing a 300-line implementation file in one shot so all tests pass simultaneously. **This is strictly prohibited.**
+
 - **Why It Fails:** Writing all tests upfront is Waterfall in disguise. It forces the AI to hallucinate and lock in speculative method signatures and class structures before any code runs. If test #3 reveals a design flaw, tests #4–20 are broken legacy code before running.
 - **Falsifiability Failure:** When 20 tests fail at once, you never prove that each individual assertion would catch its specific regression. Many batch tests are tautologies that pass by coincidence.
 
 ### The Mandatory Incremental Nano-Cycle
+
 Every collaborator discovered in Phase 4 must progress through micro-cycles of one behavior at a time:
+
 1. **RED (Micro-Assertion):** Write **ONE** test asserting a single micro-behavior (e.g. `expect(cart.total()).toBe(0)`).
 2. **VERIFY RED:** Run the test suite (`npm test`). **Inspect and verify the specific failure message** (e.g. "method not defined" or "expected 0, got undefined"). Never skip running the test while RED.
 3. **GREEN (Minimal Implementation):** Write the **absolute minimum production code** required to pass the single failing assertion (even hardcoding `return 0` if appropriate).
@@ -99,7 +103,7 @@ sequenceDiagram
     actor A as Partner A (Driver/Human)
     participant S as Test Runner
     actor B as Partner B (Navigator/AI)
-    
+
     A->>S: Writes 1 micro-test assertion (RED)
     S-->>A: Displays verified failure output
     B->>S: Writes minimal code to pass (GREEN)
@@ -154,26 +158,29 @@ flowchart TD
 ```
 
 ### 8.1. Behavioral Component Testing (@testing-library + jsdom/happy-dom)
+
 - **Test Behavior, Not Implementation**: Never assert component internal state, hook variables, or private methods. Assert what the user experiences.
 - **Strict Accessible Role-Based Queries**:
-  - *Mandatory:* `screen.getByRole('button', { name: /submit/i })`, `screen.getByRole('heading', { level: 1 })`, `screen.getByLabelText(/email/i)`.
-  - *Prohibited:* `container.querySelector('.btn-primary')`, `getByTestId('submit-btn')` (data-testid is a banned crutch for poor semantic accessibility).
+  - _Mandatory:_ `screen.getByRole('button', { name: /submit/i })`, `screen.getByRole('heading', { level: 1 })`, `screen.getByLabelText(/email/i)`.
+  - _Prohibited:_ `container.querySelector('.btn-primary')`, `getByTestId('submit-btn')` (data-testid is a banned crutch for poor semantic accessibility).
 - **Realistic User Events**: Always use `@testing-library/user-event` rather than synthetic `fireEvent` to accurately simulate browser focus, keypress, typing, and click sequences.
 
 ### 8.2. Network Isolation via Mock Service Worker (MSW)
+
 - Never mock client fetch/HTTP clients with ad-hoc mock objects (`vi.fn()`).
 - Intercept requests at the network layer using **MSW**:
   ```typescript
   // Deterministic network boundary simulation
-  http.get('/api/v1/orders', () => HttpResponse.json(mockOrders))
+  http.get("/api/v1/orders", () => HttpResponse.json(mockOrders));
   ```
 - **The 4 Universal UI Presentation States**: Component tests must explicitly assert:
-  1. *Loading State:* Accessible spinner / skeleton is rendered while request is in flight.
-  2. *Success State:* Data grid / list renders items with correct semantic markup.
-  3. *Error State:* RFC 9457 error banner renders with retry button when API returns `500` or `422`.
-  4. *Empty State:* Meaningful empty-state message and CTA when API returns `[]`.
+  1. _Loading State:_ Accessible spinner / skeleton is rendered while request is in flight.
+  2. _Success State:_ Data grid / list renders items with correct semantic markup.
+  3. _Error State:_ RFC 9457 error banner renders with retry button when API returns `500` or `422`.
+  4. _Empty State:_ Meaningful empty-state message and CTA when API returns `[]`.
 
 ### 8.3. Automated Headless Accessibility Gates (axe-core)
+
 - Every component test suite must execute automated accessibility checks using `axe-core` (`vitest-axe` or `@axe-core/playwright`):
   ```typescript
   const { container } = render(<OrderDetailsModal orderId="ord_123" />);
@@ -183,6 +190,7 @@ flowchart TD
 - Fails the test automatically on missing ARIA labels, invalid heading hierarchies, contrast defects, or unlinked form labels without requiring human eyesight.
 
 ### 8.4. End-to-End Headless Browser Automation (Playwright)
+
 - For critical user journeys (authentication, checkout, resource creation):
   - Run headless Chromium in CLI/CI: `npx playwright test`.
   - Configure automated forensic captures on failure: screenshots, trace files, and videos saved to `test-results/` for immediate agent inspection.

@@ -1,5 +1,5 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - triggers</title>
 <div data-scope='{"fast":0,"slow":0,"single":0,"auto":0,"loaded":"no","picked":"r","echo":"none"}'>
   <p>
@@ -30,7 +30,9 @@
 </div>
 <script src="../dist/laghu.min.js"></script>
 <script>
-  var root = document.querySelector('[data-scope]');
-  var s = Laghu.hydrate(root, JSON.parse(root.getAttribute('data-scope')));
-  s.noop = function () { /* submit was prevented, nothing to do */ };
+  var root = document.querySelector("[data-scope]");
+  var s = Laghu.hydrate(root, JSON.parse(root.getAttribute("data-scope")));
+  s.noop = function () {
+    /* submit was prevented, nothing to do */
+  };
 </script>

@@ -1,5 +1,5 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - custom directives</title>
 <div data-scope='{"show":true,"wide":false}'>
   <p>Clock: <span data-ticker></span></p>
@@ -7,24 +7,28 @@
   <template data-if="show">
     <p>Extra: <span data-ticker></span></p>
   </template>
-  <input data-model="name" data-autofocus="true" placeholder="focused on load">
+  <input data-model="name" data-autofocus="true" placeholder="focused on load" />
   <p data-class:wide="wide">wide toggles: <button data-click="wide = !wide">flip</button></p>
 </div>
 <script src="../dist/laghu.min.js"></script>
 <script>
-  Laghu.directive('ticker', function (ctx) {
-    function tick() { ctx.el.textContent = new Date().toLocaleTimeString(); }
+  Laghu.directive("ticker", function (ctx) {
+    function tick() {
+      ctx.el.textContent = new Date().toLocaleTimeString();
+    }
     tick();
     var id = setInterval(tick, 1000);
-    return function () { clearInterval(id); };
+    return function () {
+      clearInterval(id);
+    };
   });
-  Laghu.directive('autofocus', function (ctx) {
+  Laghu.directive("autofocus", function (ctx) {
     var stop = ctx.effect(function () {
       if (ctx.get()) ctx.el.focus();
     });
     return stop;
   });
 
-  var root = document.querySelector('[data-scope]');
-  var s = Laghu.hydrate(root, { show: true, wide: false, name: '' });
+  var root = document.querySelector("[data-scope]");
+  var s = Laghu.hydrate(root, { show: true, wide: false, name: "" });
 </script>

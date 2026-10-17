@@ -1,9 +1,16 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - components</title>
 <style>
-  user-card:not(:defined) { visibility: hidden; }
-  user-card { display: block; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
+  user-card:not(:defined) {
+    visibility: hidden;
+  }
+  user-card {
+    display: block;
+    border: 1px solid #ccc;
+    padding: 8px;
+    margin: 8px 0;
+  }
 </style>
 
 <user-card name="Grace">
@@ -18,7 +25,7 @@
   <button data-click="like">like</button>
 </user-card>
 
-<div data-scope='{}'>
+<div data-scope="{}">
   <button data-click="rename">rename first card to Hopper</button>
   <button data-click="remove">remove first card</button>
   <button data-click="restore">restore first card</button>
@@ -28,35 +35,45 @@
 <script src="../dist/laghu.min.js"></script>
 <script>
   function log(msg) {
-    var p = document.querySelector('#mountlog');
-    p.textContent += msg + ' ';
+    var p = document.querySelector("#mountlog");
+    p.textContent += msg + " ";
   }
-  Laghu.define('user-card', function () {
+  Laghu.define("user-card", function () {
     return {
-      state: { name: '', likes: 0 },
+      state: { name: "", likes: 0 },
       actions: {
-        like: function () { this.likes++; }
+        like: function () {
+          this.likes++;
+        },
       },
-      observed: ['name'],
-      onMount: function () { log('mounted:' + this.name); }
+      observed: ["name"],
+      onMount: function () {
+        log("mounted:" + this.name);
+      },
     };
   });
 
-  var root = document.querySelector('[data-scope]');
-  var first = document.querySelector('user-card');
-  Laghu.hydrate(root, {}, {
-    rename: function () { first.setAttribute('name', 'Hopper'); },
-    remove: function () {
-      first.remove();
-      log('unmounted');
+  var root = document.querySelector("[data-scope]");
+  var first = document.querySelector("user-card");
+  Laghu.hydrate(
+    root,
+    {},
+    {
+      rename: function () {
+        first.setAttribute("name", "Hopper");
+      },
+      remove: function () {
+        first.remove();
+        log("unmounted");
+      },
+      restore: function () {
+        if (!document.contains(first)) {
+          document.body.insertBefore(first, root);
+        }
+      },
     },
-    restore: function () {
-      if (!document.contains(first)) {
-        document.body.insertBefore(first, root);
-      }
-    }
-  });
-  document.querySelector('user-card').addEventListener('laghu:unmount', function () {
-    log('unmount-event');
+  );
+  document.querySelector("user-card").addEventListener("laghu:unmount", function () {
+    log("unmount-event");
   });
 </script>

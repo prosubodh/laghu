@@ -47,10 +47,12 @@ Step 1. Save this as index.html and open it by double-clicking
 
 ```html
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>counter</title>
 <style>
-  counter-widget:not(:defined) { visibility: hidden; }
+  counter-widget:not(:defined) {
+    visibility: hidden;
+  }
 </style>
 
 <counter-widget>
@@ -60,12 +62,14 @@ Step 1. Save this as index.html and open it by double-clicking
 
 <script src="laghu.min.js"></script>
 <script>
-  Laghu.define('counter-widget', function () {
+  Laghu.define("counter-widget", function () {
     return {
       state: { count: 0 },
       actions: {
-        increment: function () { this.count++; }
-      }
+        increment: function () {
+          this.count++;
+        },
+      },
     };
   });
 </script>
@@ -165,7 +169,7 @@ Islands hydrate automatically when the document is ready. To hydrate
 manually and keep the state handle:
 
 ```js
-var root = document.querySelector('[data-scope]');
+var root = document.querySelector("[data-scope]");
 var state = Laghu.hydrate(root, { count: 0 });
 state.count = 5; // bound nodes update shortly after
 ```
@@ -207,7 +211,7 @@ Binds any attribute to an expression. Removing values (`false`,
 
 ```html
 <a data-bind:href="user.url">profile</a>
-<img data-bind:src="photo.src" data-bind:alt="photo.alt">
+<img data-bind:src="photo.src" data-bind:alt="photo.alt" />
 <button data-bind:disabled="!form.valid">Save</button>
 ```
 
@@ -235,14 +239,18 @@ multi select, textarea. State writes skip a focused text field whose
 value already matches, so typing never loses the caret.
 
 ```html
-<input data-model="form.q" placeholder="search">
-<input type="checkbox" data-model="form.agree">
-<input type="checkbox" value="a" data-model="form.tags">
-<input type="checkbox" value="b" data-model="form.tags">
-<input type="radio" value="r" data-model="form.color">
-<select data-model="form.color"><option value="r">red</option></select>
-<select multiple data-model="form.colors">...</select>
-<input type="number" data-model="form.qty">
+<input data-model="form.q" placeholder="search" />
+<input type="checkbox" data-model="form.agree" />
+<input type="checkbox" value="a" data-model="form.tags" />
+<input type="checkbox" value="b" data-model="form.tags" />
+<input type="radio" value="r" data-model="form.color" />
+<select data-model="form.color">
+  <option value="r">red</option>
+</select>
+<select multiple data-model="form.colors">
+  ...
+</select>
+<input type="number" data-model="form.qty" />
 ```
 
 ### data-show
@@ -286,7 +294,7 @@ parent scope.
 <ul>
   <template data-for="todo in todos" data-key="id">
     <li>
-      <input type="checkbox" data-model="todo.done">
+      <input type="checkbox" data-model="todo.done" />
       <span data-bind="todo.title"></span>
     </li>
   </template>
@@ -314,12 +322,14 @@ function. Accepts `data-trigger` modifiers (see section 5).
 Actions run with state as `this`:
 
 ```js
-Laghu.define('x-y', function () {
+Laghu.define("x-y", function () {
   return {
     state: { count: 0 },
     actions: {
-      increment: function () { this.count++; }
-    }
+      increment: function () {
+        this.count++;
+      },
+    },
   };
 });
 ```
@@ -334,7 +344,7 @@ The event is visible inside as `$event`.
 
 ```html
 <form data-on:submit.prevent="save">...</form>
-<input data-on:input="q = $event.target.value">
+<input data-on:input="q = $event.target.value" />
 <div data-on:keydown.enter="send">...</div>
 ```
 
@@ -347,7 +357,7 @@ Runs once per hydration as an action string. Useful for seeding a
 row scope or kicking off a load.
 
 ```html
-<div data-scope='{}' data-init="load">...</div>
+<div data-scope="{}" data-init="load">...</div>
 ```
 
 ### data-get, data-post, data-put, data-patch, data-delete
@@ -357,7 +367,7 @@ overrides the method. See section 8 for the full fetch guide.
 
 ```html
 <button data-get="/api/user" data-target="#out">Load</button>
-<form data-post="/api/save" data-target="#msg" data-swap="inner">
+<form data-post="/api/save" data-target="#msg" data-swap="inner"></form>
 ```
 
 ### data-target, data-swap, data-select, data-vals, data-headers
@@ -398,16 +408,30 @@ a real router; this one stays small on purpose.
 <div id="view"></div>
 <script>
   LaghuRouter.route({
-    target: '#view',
+    target: "#view",
     scope: state,
     routes: [
-      { path: '/', render: function () { return '<h1>Home</h1>'; } },
-      { path: '/user/:id', render: function (p) { return '<h1>User ' + p.id + '</h1>'; } }
+      {
+        path: "/",
+        render: function () {
+          return "<h1>Home</h1>";
+        },
+      },
+      {
+        path: "/user/:id",
+        render: function (p) {
+          return "<h1>User " + p.id + "</h1>";
+        },
+      },
     ],
-    notfound: function () { return '<h1>Missing</h1>'; },
-    beforeEach: function (to) { return true; }
+    notfound: function () {
+      return "<h1>Missing</h1>";
+    },
+    beforeEach: function (to) {
+      return true;
+    },
   });
-  LaghuRouter.navigate('/user/42');
+  LaghuRouter.navigate("/user/42");
 </script>
 ```
 
@@ -430,7 +454,7 @@ harvested once at setup so swaps never destroy them:
   <template data-route-notfound><h1>Missing</h1></template>
 </div>
 <script>
-  LaghuRouter.route({ target: '#view', scope: state });
+  LaghuRouter.route({ target: "#view", scope: state });
 </script>
 ```
 
@@ -441,10 +465,12 @@ word is the event):
 
 ```html
 <button data-get="/s" data-trigger="click delay:500ms">search</button>
-<input data-get="/s" data-trigger="change changed throttle:1s">
+<input data-get="/s" data-trigger="change changed throttle:1s" />
 <div data-get="/t" data-trigger="every 5s">
-<div data-get="/b" data-trigger="load">
-<div data-get="/b" data-trigger="revealed">
+  <div data-get="/b" data-trigger="load">
+    <div data-get="/b" data-trigger="revealed"></div>
+  </div>
+</div>
 ```
 
 Modifiers:
@@ -504,14 +530,18 @@ observed attribute names, and an optional onMount hook.
 - Removal destroys all bindings. `moveBefore` moves keep state.
 
 ```js
-Laghu.define('user-card', function () {
+Laghu.define("user-card", function () {
   return {
-    state: { name: 'Ada', likes: 0 },
+    state: { name: "Ada", likes: 0 },
     actions: {
-      like: function () { this.likes++; }
+      like: function () {
+        this.likes++;
+      },
     },
-    observed: ['name'],
-    onMount: function () { /* this is the state */ }
+    observed: ["name"],
+    onMount: function () {
+      /* this is the state */
+    },
   };
 });
 ```
@@ -584,7 +614,9 @@ scriptable URLs stripped), not a policy. Install a real sanitizer
 when rendering untrusted HTML:
 
 ```js
-Laghu.sanitize(function (h) { return DOMPurify.sanitize(h); });
+Laghu.sanitize(function (h) {
+  return DOMPurify.sanitize(h);
+});
 ```
 
 ### Laghu.filter(name, fn) and display pipes
@@ -602,7 +634,9 @@ which unknown names warn about and pass through.
 ```
 
 ```js
-Laghu.filter('shout', function (v) { return String(v) + '!'; });
+Laghu.filter("shout", function (v) {
+  return String(v) + "!";
+});
 ```
 
 ### Laghu.scope(parent, vars)
@@ -615,8 +649,8 @@ Creates or fetches a named global reactive store. Read it in any
 binding as `$store.cart.n`.
 
 ```js
-Laghu.store('cart', { n: 0 });
-Laghu.store('cart').n++;
+Laghu.store("cart", { n: 0 });
+Laghu.store("cart").n++;
 ```
 
 ```html
@@ -629,8 +663,12 @@ Derived value kept fresh by an effect. Call the getter inside
 bindings or other effects to subscribe.
 
 ```js
-var total = Laghu.computed(function () { return state.price * state.qty; });
-Laghu.effect(function () { el.textContent = total(); });
+var total = Laghu.computed(function () {
+  return state.price * state.qty;
+});
+Laghu.effect(function () {
+  el.textContent = total();
+});
 ```
 
 ### Laghu.watch(scope, expr, cb)
@@ -645,8 +683,8 @@ Persists a named store to localStorage (debounced) with versioned
 restore. Mismatched versions reseed instead of loading.
 
 ```js
-Laghu.store('cart', { n: 0 });
-Laghu.persist('cart', { key: 'cart:v1', version: 1 });
+Laghu.store("cart", { n: 0 });
+Laghu.persist("cart", { key: "cart:v1", version: 1 });
 ```
 
 ### Laghu.directive(name, fn)
@@ -655,7 +693,7 @@ Registers `data-name`. The function receives `{ el, get, effect,
 scope }` and may return a cleanup function.
 
 ```js
-Laghu.directive('focus', function (ctx) {
+Laghu.directive("focus", function (ctx) {
   var stop = ctx.effect(function () {
     if (ctx.get()) ctx.el.focus();
   });
@@ -664,7 +702,7 @@ Laghu.directive('focus', function (ctx) {
 ```
 
 ```html
-<input data-focus="shouldFocus">
+<input data-focus="shouldFocus" />
 ```
 
 ### Laghu.destroyTree(root)
@@ -710,9 +748,7 @@ JSON example. The response object merges with `Object.assign`, so
 bound nodes update through normal reactivity:
 
 ```html
-<button data-get="/api/user" data-trigger="click queue:last">
-  Load user
-</button>
+<button data-get="/api/user" data-trigger="click queue:last">Load user</button>
 <p>Hello, <span data-bind="user.name">stranger</span></p>
 ```
 
@@ -720,17 +756,17 @@ HTML example. The fragment swaps into the target and hydrates, so
 new `data-bind` and `data-click` attributes work at once:
 
 ```html
-<button data-get="/rows?page=2" data-target="#list" data-swap="append">
-  More
-</button>
-<ul id="list">...</ul>
+<button data-get="/rows?page=2" data-target="#list" data-swap="append">More</button>
+<ul id="list">
+  ...
+</ul>
 ```
 
 Form example. The enclosing form serializes to JSON automatically:
 
 ```html
 <form data-post="/api/save" data-target="#msg">
-  <input name="email">
+  <input name="email" />
   <button>Save</button>
   <p id="msg" data-bind="result"></p>
 </form>
@@ -739,8 +775,8 @@ Form example. The enclosing form serializes to JSON automatically:
 Confirm example. Cancel in `before-request`:
 
 ```js
-document.querySelector('#del').addEventListener('laghu:before-request', function (e) {
-  if (!confirm('Delete?')) e.preventDefault();
+document.querySelector("#del").addEventListener("laghu:before-request", function (e) {
+  if (!confirm("Delete?")) e.preventDefault();
 });
 ```
 
@@ -844,7 +880,9 @@ registers them. Two fixes, best used together:
 2. Hide only the unknown state with CSS:
 
 ```css
-my-card:not(:defined) { visibility: hidden; }
+my-card:not(:defined) {
+  visibility: hidden;
+}
 ```
 
 `visibility` (not `display`) avoids layout shift. `Laghu.css`

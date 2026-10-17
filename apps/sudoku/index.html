@@ -1,22 +1,35 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>Sudoku - laghu app</title>
-<link rel="stylesheet" href="styles.css">
-<style>sudoku-grid:not(:defined),sudoku-pad:not(:defined){visibility:hidden}</style>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  sudoku-grid:not(:defined),
+  sudoku-pad:not(:defined) {
+    visibility: hidden;
+  }
+</style>
 
 <h1>Sudoku</h1>
 
 <sudoku-grid>
   <p id="hud">
     <span data-clock id="clock" data-bind="clock">00:00</span>
-    mistakes <span id="mistakes" data-bind="mistakes">0</span>
-    hints <span id="hints" data-bind="hints">3</span>
+    mistakes <span id="mistakes" data-bind="mistakes">0</span> hints
+    <span id="hints" data-bind="hints">3</span>
     <span id="level" data-bind="difficulty">easy</span>
   </p>
   <p id="won" data-show="status === 'won'">Solved. Pick a level below.</p>
   <div class="grid" tabindex="0" data-on:keydown="key">
     <template data-for="c in cells" data-key="id">
-      <button class="cell" data-click="select" data-class:given="c.given" data-class:sel="c.id === selected" data-class:same="c.v !== 0 && c.v === selVal" data-class:err="c.err" data-bind="c.v || ''"></button>
+      <button
+        class="cell"
+        data-click="select"
+        data-class:given="c.given"
+        data-class:sel="c.id === selected"
+        data-class:same="c.v !== 0 && c.v === selVal"
+        data-class:err="c.err"
+        data-bind="c.v || ''"
+      ></button>
     </template>
   </div>
 </sudoku-grid>

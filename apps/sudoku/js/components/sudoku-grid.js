@@ -8,25 +8,25 @@
  * selection), .err (conflict). All precomputed or scope-readable so
  * templates stay free of function calls with arguments.
  */
-Laghu.define('sudoku-grid', function () {
-  var store = Laghu.store('sudoku');
+Laghu.define("sudoku-grid", function () {
+  var store = Laghu.store("sudoku");
   return {
     state: store,
     actions: {
       select: function () {
-        SudokuStore.select(store, Laghu.get(this, 'c.id'));
+        SudokuStore.select(store, Laghu.get(this, "c.id"));
       },
       key: function () {
-        var k = (Laghu.get(this, '$event') || {}).key;
+        var k = (Laghu.get(this, "$event") || {}).key;
         if (!k) return;
-        if (k >= '1' && k <= '9') SudokuStore.input(store, Number(k));
-        else if (k === 'Backspace' || k === 'Delete' || k === '0') SudokuStore.erase(store);
-        else if (k === 'ArrowUp') SudokuStore.select(store, move(store.selected, -9));
-        else if (k === 'ArrowDown') SudokuStore.select(store, move(store.selected, 9));
-        else if (k === 'ArrowLeft') SudokuStore.select(store, move(store.selected, -1));
-        else if (k === 'ArrowRight') SudokuStore.select(store, move(store.selected, 1));
-      }
-    }
+        if (k >= "1" && k <= "9") SudokuStore.input(store, Number(k));
+        else if (k === "Backspace" || k === "Delete" || k === "0") SudokuStore.erase(store);
+        else if (k === "ArrowUp") SudokuStore.select(store, move(store.selected, -9));
+        else if (k === "ArrowDown") SudokuStore.select(store, move(store.selected, 9));
+        else if (k === "ArrowLeft") SudokuStore.select(store, move(store.selected, -1));
+        else if (k === "ArrowRight") SudokuStore.select(store, move(store.selected, 1));
+      },
+    },
   };
 
   function move(i, d) {

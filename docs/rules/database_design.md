@@ -20,6 +20,7 @@ flowchart TD
 ```
 
 ### Invariants:
+
 1. **Mandatory Foreign Keys**: Every relational association must define an explicit foreign key constraint with explicit `ON DELETE` semantics (`ON DELETE RESTRICT` or `ON DELETE CASCADE`).
 2. **Domain `CHECK` Constraints**: Enforce domain value ranges at the schema level:
    ```sql
@@ -43,7 +44,7 @@ CREATE TABLE resources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL,
   name VARCHAR(255) NOT NULL,
-  
+
   -- The Canonical 6 Total Audit Fields
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   created_by UUID NOT NULL,
@@ -55,6 +56,7 @@ CREATE TABLE resources (
 ```
 
 ### Rules & Append-Only Exception:
+
 - **Mutable Tables:** All 6 fields are mandatory. Application repositories must automatically populate `createdBy`/`updatedBy` from the ambient authenticated user context.
 - **Append-Only Event / Ledger Tables:** Immutable financial ledgers, audit logs, and domain events omit `updated_at`, `updated_by`, `deleted_at`, and `deleted_by` (immutable rows are never updated or deleted).
 
@@ -63,12 +65,13 @@ CREATE TABLE resources (
 ## 3. Soft-Delete Invariants & Partial Unique Indexes
 
 When implementing soft-delete (`deleted_at IS NOT NULL`):
+
 1. **Never Use Unfiltered Unique Constraints**: A standard `UNIQUE(slug)` constraint prevents creating a new record with the same slug after deleting an old record.
 2. **Mandatory Partial Unique Index**:
    ```sql
    -- Correct: Allows reusing slug after soft-deletion
-   CREATE UNIQUE INDEX idx_resources_tenant_slug_active 
-     ON resources (tenant_id, slug) 
+   CREATE UNIQUE INDEX idx_resources_tenant_slug_active
+     ON resources (tenant_id, slug)
      WHERE deleted_at IS NULL;
    ```
 3. **Soft-Delete Query Filtering**: All read queries must filter `WHERE deleted_at IS NULL` unless explicitly requesting archived records.
@@ -80,6 +83,7 @@ When implementing soft-delete (`deleted_at IS NOT NULL`):
 Every operation mutating multiple database rows or coordinating interrelated aggregates must execute within an explicit **ACID Transaction**:
 
 ### Transaction Guidelines:
+
 - **Single Aggregate Transactions**: Strive to keep transactions bounded to a single aggregate root.
 - **Isolation Level Selection**:
   - `READ COMMITTED` (Default): Acceptable for standard CRUD operations.
@@ -121,5 +125,6 @@ sequenceDiagram
 ```
 
 ### Outbox Invariants:
+
 1. **Atomic Ingestion**: Domain entity mutation and event insertion must share the identical database transaction.
 2. **Guaranteed At-Least-Once Delivery**: The outbox relay guarantees delivery to consumers; consumers must implement idempotency.

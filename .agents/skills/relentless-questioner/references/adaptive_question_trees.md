@@ -44,7 +44,7 @@ flowchart TD
 flowchart TD
   Q1["Does the feature integrate with an external SaaS or network endpoint?"]
   Q1 -->|Yes| Q2["What is the failure tolerance of the integration?"]
-  
+
   Q2 -->|Synchronous / Critical| Q_Sync["1. What is the strict HTTP timeout (e.g. 3000ms)?\n2. What is the circuit breaker threshold before fast-failing?\n3. What fallback response is served if the 3rd-party is down?"]
   Q2 -->|Asynchronous / Event-Driven| Q_Async["1. Does the external system provide webhooks?\n2. How are webhook signatures cryptographically verified?\n3. What is the retry backoff and dead-letter queue (DLQ) policy?"]
 
@@ -60,7 +60,7 @@ flowchart TD
 flowchart TD
   Q1["What is the expected read volume and latency requirement?"]
   Q1 -->|High Volume / Sub-50ms Latency| Q2["Is stale data acceptable for seconds/minutes?"]
-  
+
   Q2 -->|Yes| Q_Cache["1. What is the cache TTL and jitter window?\n2. What domain events trigger cache eviction?\n3. Is probabilistic early expiration (XFetch) needed?"]
   Q2 -->|No: Strict Read-After-Write Consistency| Q_Consistent["1. Read from primary database instance for 2s after mutation\n2. Bypass read replicas during write session"]
 
@@ -76,7 +76,7 @@ flowchart TD
 flowchart TD
   Q1["Does the feature introduce or modify a user interface?"]
   Q1 -->|Yes| Q2["Who is the primary actor and operational persona?"]
-  
+
   Q2 -->|Operator / Admin| Q_Op["1. Information Density: Dense tabular grid with filters?\n2. Persistent App Shell: Left collapsible sidebar route?\n3. Actions: Inline row actions or full-page drawer?"]
   Q2 -->|Consumer / Member| Q_Member["1. Experience Duality: Consumer portal (/portal)?\n2. Touch Ergonomics: Clean cards & mobile drawer?\n3. Simplified self-service actions?"]
 
@@ -98,5 +98,5 @@ When conducting the interview, use this exact syntax pattern to chain questions 
    `"Because of [Option A], [Potential Failure / Edge Case Y] becomes the primary risk."`
 3. **Ask Context-Dependent Question**:
    `"How should the system behave when [Condition Y] occurs? Specifically:"`
-   - *Sub-question 1*
-   - *Sub-question 2*
+   - _Sub-question 1_
+   - _Sub-question 2_

@@ -7,6 +7,6 @@
  * `require.main` guard means requiring it never validates or exits, and it
  * avoids a permanently-unreachable branch that blocks the 100% coverage gate.
  */
-import { main } from './validate.js';
+import { main } from "./validate.js";
 
 main();

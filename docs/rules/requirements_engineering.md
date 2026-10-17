@@ -6,9 +6,10 @@
 
 ## 1. Are User Stories Requirements?
 
-In modern product engineering (per Scrum.org and XP principles), **user stories are NOT requirements**. Rather, a user story is one specific, highly effective technique used to *express, capture, and explore* user-centric requirements.
+In modern product engineering (per Scrum.org and XP principles), **user stories are NOT requirements**. Rather, a user story is one specific, highly effective technique used to _express, capture, and explore_ user-centric requirements.
 
 ### Key Distinctions
+
 - **A Token for Conversation:** A user story is a "placeholder" or token promising a future conversation. It captures the essence, not every granular detail upfront.
 - **The "Pidgin Language" Bridge:** A pidgin language is a simplified common language that allows people with different native tongues to trade and work together. User stories act as a pidgin language bridging the business/customer perspective and the software engineering architecture without forcing either side to abandon their domain language.
 - **Ron Jeffries' 3 C's of User Stories:**
@@ -17,7 +18,9 @@ In modern product engineering (per Scrum.org and XP principles), **user stories 
   3. **Confirmation:** The executable acceptance criteria and automated tests that prove whether the story satisfies its intent.
 
 ### Non-Story Requirements
+
 Not all system requirements originate from an end-user persona or fit the user story syntax. High-integrity systems also require:
+
 - **System Invariants:** Core domain rules (e.g., "A transaction cannot be completed without a verified payment instrument").
 - **Non-Functional Requirements (NFRs):** Latency SLAs, encryption standards, concurrency limits, and accessibility compliance (WCAG 2.2 AA).
 - **Architectural Spikes:** Time-boxed exploratory investigations to resolve technical unknowns.
@@ -39,7 +42,9 @@ Ensure every user story satisfies Bill Wake's **INVEST** criteria:
 - **T - Testable:** Accompanied by concrete pass/fail assertions. Non-functional requirements are operationalized into automated tests early.
 
 ### The Multi-Layer Cake Metaphor (Vertical Slicing)
+
 Think of a complete feature as a multi-layer cake:
+
 ```mermaid
 flowchart TD
     subgraph Cake["The Multi-Layer Cake (Vertical Slicing)"]
@@ -57,6 +62,7 @@ flowchart TD
     Slice --> L3
     Slice --> L4
 ```
+
 - **Horizontal Slicing (Anti-Pattern):** Implementing only the database schema or only the UI mock. A full database table has zero observable value to the customer without presentation and logic layers.
 - **Vertical Slicing (Golden Standard):** Slicing thin through all layers (UI ➔ API ➔ Domain ➔ DB). Even a minimal vertical slice provides working functionality that can be deployed, tested, and validated empirically.
 
@@ -78,6 +84,7 @@ Scenario: Successful Digital Agreement Execution
 ```
 
 ### Writing Rules for Gherkin Scenarios
+
 - **Use Active Voice:** State explicit actor actions (`When the user clicks "Confirm Agreement"` rather than passive `When the button is clicked`).
 - **One Observable Behavior Per Scenario:** Focus each scenario on one specific state transition or business invariant.
 - **Cover Both Happy and Unhappy Paths:** Every feature must include positive paths and negative failure assertions.

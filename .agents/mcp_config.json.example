@@ -7,20 +7,11 @@
   "mcpServers": {
     "sqlite": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sqlite",
-        "--db-path",
-        "./data/app.db"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "./data/app.db"]
     },
     "filesystem": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "./docs"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./docs"]
     },
     "remote-service": {
       "url": "https://mcp.example.com/sse"

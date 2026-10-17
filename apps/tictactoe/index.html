@@ -1,8 +1,13 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>TicTacToe - laghu app</title>
-<link rel="stylesheet" href="styles.css">
-<style>ttt-board:not(:defined),ttt-score:not(:defined){visibility:hidden}</style>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  ttt-board:not(:defined),
+  ttt-score:not(:defined) {
+    visibility: hidden;
+  }
+</style>
 
 <h1>TicTacToe</h1>
 
@@ -17,7 +22,10 @@
 </ttt-board>
 
 <ttt-score>
-  <p id="score">X <span data-bind="score.X">0</span> - O <span data-bind="score.O">0</span> - draws <span data-bind="score.D">0</span></p>
+  <p id="score">
+    X <span data-bind="score.X">0</span> - O <span data-bind="score.O">0</span> - draws
+    <span data-bind="score.D">0</span>
+  </p>
   <p><button data-click="resetAll">Reset all</button></p>
 </ttt-score>
 

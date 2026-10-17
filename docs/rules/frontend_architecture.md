@@ -13,13 +13,13 @@ flowchart TD
     subgraph Gate ["Frontend Architecture YAGNI Gate"]
         B1["1. SIMPLE BASELINE (Day 1)"]
         B1_D["• Semantic HTML/markup styled with utility classes.<br/>• Battle-tested accessible headless primitives (Radix, Melt, Kobalte, PrimeVue).<br/>• Zero bespoke CSS architectures, unstyled div modals, or Redux."]
-        
+
         B2["2. ANTI-TRIGGERS (Strictly Forbidden)"]
         B2_D["• Headless backends, REST/gRPC microservices, or cloud workers.<br/>• Terminal CLI utilities, embedded libraries, or game engines.<br/>• Monolithic global state stores (Redux, MobX, Pinia) before separating server cache."]
-        
+
         B3["3. THE TIPPING POINT (Graduation Threshold)"]
         B3_D["• Dynamic client interfaces with asynchronous server data fetching.<br/>• Multi-step declarative form submissions and complex workflows.<br/>• Strict WCAG 2.2 AA accessibility, focus trapping, and keyboard navigation."]
-        
+
         B1 --- B1_D
         B2 --- B2_D
         B3 --- B3_D
@@ -51,17 +51,20 @@ flowchart LR
 ```
 
 ### 1. Outside-In Discovery (Why Interaction Must Be Refined Early)
+
 - The user's operational mental model, workflow steps, and interaction touchpoints (whether Web forms, CLI flags, or API endpoints) **guide the discovery of system capabilities**.
 - If business logic is authored in a vacuum without interaction analysis, engineers build speculative methods and database models that do not align with user journeys (**The Anemic Core Antipattern**).
-- *Mandate:* In Phase 1 (Requirements) and Phase 2 (Domain Analysis), interaction models and wireframe workflows must be refined early via [`product-analyst`](../../.agents/skills/product-analyst/SKILL.md) and [`ui_ux_architecture.md`](./ui_ux_architecture.md).
+- _Mandate:_ In Phase 1 (Requirements) and Phase 2 (Domain Analysis), interaction models and wireframe workflows must be refined early via [`product-analyst`](../../.agents/skills/product-analyst/SKILL.md) and [`ui_ux_architecture.md`](./ui_ux_architecture.md).
 
 ### 2. Inside-Out Execution (Why Domain Logic Remains Pure)
+
 - Once discovered, **business invariants are 100% decoupled from the UI**.
-- A business rule (e.g. *"An invoice cannot be paid twice"*, *"Discount cannot exceed 50%"*) must never live in a React `onClick` handler, a component hook, or a CLI flag parser (**The Smart UI Antipattern**).
+- A business rule (e.g. _"An invoice cannot be paid twice"_, _"Discount cannot exceed 50%"_) must never live in a React `onClick` handler, a component hook, or a CLI flag parser (**The Smart UI Antipattern**).
 - The presentation layer merely parses user interaction into a plain **Command DTO** and calls an **Application Use Case** (Driving Port).
 - If the Web UI is replaced with a CLI or a background job, the core domain logic requires **zero modifications**.
 
 ### 3. What If a Project Has No UI? (Headless Topologies)
+
 - For Headless Backends, Daemon Workers, and Embedded Systems:
   - The **API Schema (OpenAPI / gRPC Protobuf) or Function Signature IS the UI**.
   - For a CLI Utility, the **Command Pipeline (flags, stdin/stdout, exit codes)** IS the UI.
@@ -72,11 +75,11 @@ flowchart LR
 ## 3. Component Primitives, Headless Accessibility & WCAG 2.2 Standards
 
 - **Accessible Headless Primitives**: All interactive UI components (dialogs, dropdowns, selects, tabs, tooltips, popovers) must decouple behavioral accessibility (focus trapping, keyboard navigation, ARIA states) from visual presentation using headless primitives:
-  - *React:* `@radix-ui` / `shadcn/ui` in `@/components/ui/`
-  - *Vue:* `radix-vue` / `shadcn-vue` or `primevue`
-  - *Svelte:* `melt-ui` / `bits-ui`
-  - *Solid:* `@kobalte/core`
-  - *Angular:* `@angular/cdk/a11y`
+  - _React:_ `@radix-ui` / `shadcn/ui` in `@/components/ui/`
+  - _Vue:_ `radix-vue` / `shadcn-vue` or `primevue`
+  - _Svelte:_ `melt-ui` / `bits-ui`
+  - _Solid:_ `@kobalte/core`
+  - _Angular:_ `@angular/cdk/a11y`
 - **Zero Unstyled Raw Elements**: Never create unstyled raw HTML modals, dropdowns, or custom select tags using raw `<div>` tags and ad-hoc mouse-only click handlers.
 - **Focus Management & Trapping**:
   - Modal dialogs must trap keyboard focus within the dialog container while open.
@@ -95,11 +98,15 @@ flowchart LR
 - **Decoupling Remote Cache from Local State**: Server state (owned remotely, asynchronous, shared across clients) must never be treated as local synchronous client state.
 - **Mandatory Cache Synchronization Engine**: Asynchronous data fetching, caching, deduplication, and background revalidation must use a dedicated cache synchronization manager (e.g., TanStack Query, SWR, or RTK Query in React; Pinia Colada or VueUse `useFetch` in Vue; Superforms or SvelteKit load functions in Svelte; Angular Signals with HttpClient).
 - **Elimination of Raw Lifecycle Fetch Loops**:
-  - *Anti-Pattern:* Uncoordinated manual fetching in component lifecycles (`useEffect(() => { fetch().then(...) })`, `onMounted`, `ngOnInit`) with hand-rolled `isLoading` and `error` boolean states.
-  - *Standard Pattern (Query Hook / Cache Invalidation):*
+  - _Anti-Pattern:_ Uncoordinated manual fetching in component lifecycles (`useEffect(() => { fetch().then(...) })`, `onMounted`, `ngOnInit`) with hand-rolled `isLoading` and `error` boolean states.
+  - _Standard Pattern (Query Hook / Cache Invalidation):_
     ```tsx
-    const { data: resources, isLoading, error } = useQuery({
-      queryKey: ['resources', tenantId],
+    const {
+      data: resources,
+      isLoading,
+      error,
+    } = useQuery({
+      queryKey: ["resources", tenantId],
       queryFn: () => api.getResources(tenantId),
     });
     ```
@@ -110,7 +117,7 @@ flowchart LR
     const createResourceMutation = useMutation({
       mutationFn: (newResource: CreateResourceInput) => api.createResource(newResource),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['resources'] });
+        queryClient.invalidateQueries({ queryKey: ["resources"] });
       },
     });
     ```
@@ -123,12 +130,12 @@ flowchart LR
 - **Mandatory Schema Validation**: Every form submission must be validated against a formal declarative schema (Zod, Valibot, standard-schema, or framework validator) that mirrors shared DTO/input contracts.
 - **Dedicated Form State Engines**: Use dedicated form engines (React Hook Form, TanStack Form, VeeValidate, Superforms, Angular Reactive Forms) that track field dirty states, touched states, and asynchronous validation without triggering full component tree re-renders.
 - **Zero Unvalidated Multi-Field Objects**:
-  - *Anti-Pattern:* Unvalidated ad-hoc dictionary state (`useState({ name: '', email: '' })`) with manual string checking in submit handlers.
-  - *Standard Pattern:*
+  - _Anti-Pattern:_ Unvalidated ad-hoc dictionary state (`useState({ name: '', email: '' })`) with manual string checking in submit handlers.
+  - _Standard Pattern:_
     ```tsx
     const form = useForm<CreateUserInput>({
       resolver: zodResolver(createUserSchema),
-      defaultValues: { name: '', email: '' },
+      defaultValues: { name: "", email: "" },
     });
     ```
 - **Accessible Error Linking**: Form inputs must bind validation errors to `aria-invalid="true"` and `aria-describedby="<field>-error"`. Every input must have an associated semantic `<label>`.

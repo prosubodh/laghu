@@ -1,22 +1,24 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - two-way form bindings</title>
-<div data-scope='{"form":{"q":"","qty":1,"agree":false,"tags":[],"color":"r","colors":[],"bio":""}}'>
-  <label>Search <input data-model="form.q"></label>
+<div
+  data-scope='{"form":{"q":"","qty":1,"agree":false,"tags":[],"color":"r","colors":[],"bio":""}}'
+>
+  <label>Search <input data-model="form.q" /></label>
   <p>Echo: <span data-bind="form.q"></span></p>
 
-  <label>Qty <input type="number" data-model="form.qty"></label>
+  <label>Qty <input type="number" data-model="form.qty" /></label>
   <p>Qty plus one: <span data-bind="form.qty"></span></p>
 
-  <label><input type="checkbox" data-model="form.agree"> I agree</label>
+  <label><input type="checkbox" data-model="form.agree" /> I agree</label>
   <p>Agreed: <span data-bind="form.agree"></span></p>
 
-  <label><input type="checkbox" value="a" data-model="form.tags"> a</label>
-  <label><input type="checkbox" value="b" data-model="form.tags"> b</label>
+  <label><input type="checkbox" value="a" data-model="form.tags" /> a</label>
+  <label><input type="checkbox" value="b" data-model="form.tags" /> b</label>
   <p>Tags picked: <span data-bind="form.tags.length"></span></p>
 
-  <label><input type="radio" value="r" data-model="form.color"> red</label>
-  <label><input type="radio" value="g" data-model="form.color"> green</label>
+  <label><input type="radio" value="r" data-model="form.color" /> red</label>
+  <label><input type="radio" value="g" data-model="form.color" /> green</label>
   <select data-model="form.color">
     <option value="r">red</option>
     <option value="g">green</option>
@@ -29,16 +31,16 @@
   </select>
   <p>Multi picked: <span data-bind="form.colors.length"></span></p>
 
-  <label>Bio<br><textarea data-model="form.bio"></textarea></label>
+  <label>Bio<br /><textarea data-model="form.bio"></textarea></label>
   <p>Bio: <span data-bind="form.bio"></span></p>
 
   <button data-click="reset">Reset</button>
 </div>
 <script src="../dist/laghu.min.js"></script>
 <script>
-  var root = document.querySelector('[data-scope]');
-  var s = Laghu.hydrate(root, JSON.parse(root.getAttribute('data-scope')));
+  var root = document.querySelector("[data-scope]");
+  var s = Laghu.hydrate(root, JSON.parse(root.getAttribute("data-scope")));
   s.reset = function () {
-    this.form = { q: '', qty: 1, agree: false, tags: [], color: 'r', colors: [], bio: '' };
+    this.form = { q: "", qty: 1, agree: false, tags: [], color: "r", colors: [], bio: "" };
   };
 </script>

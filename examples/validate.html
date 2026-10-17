@@ -1,14 +1,14 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>laghu.js - validation</title>
 <form data-form data-scope="{}" id="join">
-  <label>Email <input name="email" data-validate="required|email"></label>
+  <label>Email <input name="email" data-validate="required|email" /></label>
   <span data-errors-for="email"></span>
-  <label>Age <input name="age" data-validate="required|number|minv:13|maxv:120"></label>
+  <label>Age <input name="age" data-validate="required|number|minv:13|maxv:120" /></label>
   <span data-errors-for="age"></span>
-  <label>Password <input name="pw" type="password" data-validate="required|min:8"></label>
+  <label>Password <input name="pw" type="password" data-validate="required|min:8" /></label>
   <span data-errors-for="pw"></span>
-  <label>Confirm <input name="pw2" type="password" data-validate="required|match:pw"></label>
+  <label>Confirm <input name="pw2" type="password" data-validate="required|match:pw" /></label>
   <span data-errors-for="pw2"></span>
   <p><button>Join</button></p>
   <p id="done" data-show="joined">welcome aboard</p>
@@ -16,7 +16,9 @@
 <script src="../dist/laghu.min.js"></script>
 <script src="../dist/validate.min.js"></script>
 <script>
-  var root = document.querySelector('#join');
+  var root = document.querySelector("#join");
   var s = Laghu.hydrate(root, { joined: false });
-  root.addEventListener('submit', function () { s.joined = true; });
+  root.addEventListener("submit", function () {
+    s.joined = true;
+  });
 </script>

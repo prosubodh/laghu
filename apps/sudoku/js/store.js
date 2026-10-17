@@ -4,7 +4,7 @@
  * Mistakes count placements that create a conflict. Hints fill from
  * the known solution and never touch givens. */
 var SudokuStore = (function () {
-  'use strict';
+  "use strict";
 
   var SEEDS = { easy: 11, medium: 22, hard: 33 };
 
@@ -17,15 +17,17 @@ var SudokuStore = (function () {
       mistakes: 0,
       hints: 3,
       seconds: 0,
-      clock: '00:00',
-      status: 'playing',
-      difficulty: 'easy',
-      digits: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (d) { return { id: d, v: d }; }),
+      clock: "00:00",
+      status: "playing",
+      difficulty: "easy",
+      digits: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (d) {
+        return { id: d, v: d };
+      }),
       levels: [
-        { id: 'easy', label: 'Easy' },
-        { id: 'medium', label: 'Medium' },
-        { id: 'hard', label: 'Hard' }
-      ]
+        { id: "easy", label: "Easy" },
+        { id: "medium", label: "Medium" },
+        { id: "hard", label: "Hard" },
+      ],
     };
   }
 
@@ -41,12 +43,14 @@ var SudokuStore = (function () {
     store.hints = 3;
     store.seconds = 0;
     store.clock = SudokuStore.fmtTime(0);
-    store.status = 'playing';
+    store.status = "playing";
     store.difficulty = difficulty;
   }
 
   function vals(store) {
-    return store.cells.map(function (c) { return c.v; });
+    return store.cells.map(function (c) {
+      return c.v;
+    });
   }
 
   function refreshErr(store) {
@@ -55,24 +59,24 @@ var SudokuStore = (function () {
   }
 
   function select(store, i) {
-    if (store.status !== 'playing') return;
+    if (store.status !== "playing") return;
     store.selected = i;
     store.selVal = store.cells[i] ? store.cells[i].v : 0;
   }
 
   function input(store, d) {
-    if (store.status !== 'playing') return;
+    if (store.status !== "playing") return;
     var i = store.selected;
     if (i < 0 || store.cells[i].given) return;
     store.cells[i].v = d;
     store.selVal = d;
     refreshErr(store);
     if (store.cells[i].err) store.mistakes++;
-    if (SudokuLib.isComplete(vals(store))) store.status = 'won';
+    if (SudokuLib.isComplete(vals(store))) store.status = "won";
   }
 
   function erase(store) {
-    if (store.status !== 'playing') return;
+    if (store.status !== "playing") return;
     var i = store.selected;
     if (i < 0 || store.cells[i].given) return;
     store.cells[i].v = 0;
@@ -81,11 +85,14 @@ var SudokuStore = (function () {
   }
 
   function hint(store) {
-    if (store.status !== 'playing' || store.hints <= 0) return;
+    if (store.status !== "playing" || store.hints <= 0) return;
     var i = store.selected;
     if (i < 0 || store.cells[i].given || store.cells[i].v === store.solution[i]) {
       for (var k = 0; k < 81; k++) {
-        if (!store.cells[k].given && store.cells[k].v !== store.solution[k]) { i = k; break; }
+        if (!store.cells[k].given && store.cells[k].v !== store.solution[k]) {
+          i = k;
+          break;
+        }
       }
     }
     if (i < 0 || store.cells[i].given) return;
@@ -94,12 +101,13 @@ var SudokuStore = (function () {
     store.selVal = store.solution[i];
     store.hints--;
     refreshErr(store);
-    if (SudokuLib.isComplete(vals(store))) store.status = 'won';
+    if (SudokuLib.isComplete(vals(store))) store.status = "won";
   }
 
   function fmtTime(sec) {
-    var m = Math.floor(sec / 60), s = sec % 60;
-    return (m < 10 ? '0' + m : '' + m) + ':' + (s < 10 ? '0' + s : '' + s);
+    var m = Math.floor(sec / 60),
+      s = sec % 60;
+    return (m < 10 ? "0" + m : "" + m) + ":" + (s < 10 ? "0" + s : "" + s);
   }
 
   return {
@@ -110,6 +118,6 @@ var SudokuStore = (function () {
     erase: erase,
     hint: hint,
     fmtTime: fmtTime,
-    SEEDS: SEEDS
+    SEEDS: SEEDS,
   };
 })();

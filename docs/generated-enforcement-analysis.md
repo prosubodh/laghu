@@ -30,7 +30,7 @@ The scaffolded project contains exactly one toolchain-adjacent file:
 The polyglot fitness-function table (`docs/rules/clean_code.md`, § Polyglot
 Fitness Function Standards: ESLint / ruff / clippy / golangci-lint /
 Checkstyle / Roslyn) ships as **documentation only**. Phase 4 step 3 of
-`lets-build/SKILL.md` instructs the *agent* to "generate … deterministic
+`lets-build/SKILL.md` instructs the _agent_ to "generate … deterministic
 linter configurations" — i.e. enforcement in a user's project is agent-authored
 and non-deterministic, exactly the gap the plan flagged. **A non-TypeScript
 project gets no linter at all unless the agent writes one.**
@@ -40,7 +40,7 @@ project gets no linter at all unless the agent writes one.**
 `backend+typescript` and `backend+python` produce byte-identical file lists
 (18 files each: `.gitkeep` dirs, `tokens.json`, `smoke_test.sh`,
 `workspace-profile.env`). `LANGUAGE` is validated and recorded but never
-branches generation. Topology *does* scope directories (7–18 files by
+branches generation. Topology _does_ scope directories (7–18 files by
 topology). So: topology-scoping is deterministic; language support is a
 recorded intention, not a generated artifact.
 
@@ -49,12 +49,12 @@ recorded intention, not a generated artifact.
 `TEMPLATE_ITEMS` (`src/scaffold.ts`) ships `docs`, `.agents`, `scripts`,
 `.github` — but **not** `src/`, `lib/`, or `bin/`. Consequences, all verified:
 
-| Check | azcodr repo (control) | Scaffolded project |
-|---|---|---|
-| `.agents/scripts/agent_guard.js` vs `rm -rf /` payload | **BLOCKED** (exit 1) | **ALLOWED** (exit 0) |
-| `lib/agent-guard.js` present | yes | **missing** — the guard's dynamic import rejects, and `main().catch(() => process.exit(0))` fails open |
-| `.agents/hooks.json` references `agent_guard.js` | no | no |
-| All hook blocks in `hooks.json` | `enabled: false` | `enabled: false` (shipped copy) |
+| Check                                                  | azcodr repo (control) | Scaffolded project                                                                                     |
+| ------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.agents/scripts/agent_guard.js` vs `rm -rf /` payload | **BLOCKED** (exit 1)  | **ALLOWED** (exit 0)                                                                                   |
+| `lib/agent-guard.js` present                           | yes                   | **missing** — the guard's dynamic import rejects, and `main().catch(() => process.exit(0))` fails open |
+| `.agents/hooks.json` references `agent_guard.js`       | no                    | no                                                                                                     |
+| All hook blocks in `hooks.json`                        | `enabled: false`      | `enabled: false` (shipped copy)                                                                        |
 
 The flagship "agent cannot skip" control therefore degrades, in a generated
 project, to: an unwired hook script, with its engine missing, configured off,
@@ -62,7 +62,7 @@ that permits on error. The `boundaries` engine (`npx azcodr boundaries`)
 likewise does not ship — only `scripts/validate-cli.js` (config/ledger/link
 checks) is present.
 
-## What *does* transfer deterministically
+## What _does_ transfer deterministically
 
 - 28 rule docs, 6 skills, `AGENTS.md` parity pointers, empty ADR ledger
   (`data/memory.template`), `safety_guard.sh` + `verify_completion.sh` (present
@@ -88,8 +88,8 @@ checks) is present.
    language decision for the agent to implement in Phase 4.
 4. **Close the benchmark gap this reveals.** `benchmark/RESULTS.md` Arm B/C
    assume working hooks + boundary engine; in a real scaffolded project neither
-   is present. A fourth arm — *raw scaffolded project, no agent-authored
-   additions* — would measure the actual out-of-box enforcement: expect 0/3
+   is present. A fourth arm — _raw scaffolded project, no agent-authored
+   additions_ — would measure the actual out-of-box enforcement: expect 0/3
    traps caught.
 
 ---
@@ -115,7 +115,7 @@ names the test that locks it:
 3. **Fail-open guard → vendored engine + fail-closed install.**
    The guard engine ships inside `.agents/` (`.agents/lib/`, byte-locked to
    `lib/` output by test), `agent_guard.js` resolves vendored-first, and a
-   missing engine exits 2 naming every path tried. Unparseable *payloads*
+   missing engine exits 2 naming every path tried. Unparseable _payloads_
    still fail open inside `inspectPreTool` per ADR-005 (ambiguous input, not a
    broken install). `hooks.json` (+`.example`) wires an `architectural-guard`
    PreToolUse entry. Locked by the three new `tests/agent-guard.test.ts` cases.

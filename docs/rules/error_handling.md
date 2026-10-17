@@ -7,6 +7,7 @@
 ## 1. Fail-Fast Configuration & Environment Validation
 
 Validate all configuration parameters and environment variables at process bootstrap using strict schema definitions before initializing servers or database connection pools:
+
 - **Immediate Process Termination**: Halt startup immediately with non-zero exit code if any mandatory variable is missing, malformed, or insecure.
 - **Strict Prohibition of Secret Fallbacks**: Never provide default fallback values for production secrets, database credentials, or private cryptographic keys.
 
