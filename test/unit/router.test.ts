@@ -98,6 +98,14 @@ describe("router.html page", () => {
     (window as any).LaghuRouter = LaghuRouter;
     const html = fs.readFileSync(path.join(root, "examples", "router.html"), "utf8");
     document.body.innerHTML = html.slice(html.indexOf("<nav>"), html.indexOf("<script src"));
+
+    const origRoute = LaghuRouter.route;
+    let stopExample: any;
+    LaghuRouter.route = (opts: any) => {
+      stopExample = origRoute(opts);
+      return stopExample;
+    };
+
     window.eval(
       fs
         .readFileSync(path.join(root, "examples", "router.html"), "utf8")
@@ -132,6 +140,8 @@ describe("router.html page", () => {
     await tick(30);
     expect(document.querySelector("#view")!.textContent).toContain("VIP");
     window.location.hash = "#/";
+    if (stopExample) stopExample();
+    LaghuRouter.route = origRoute;
   });
 });
 
@@ -200,4 +210,191 @@ describe("LaghuRouter declarative templates", () => {
     stop();
     window.location.hash = "#/";
   });
+
+  it("compiles wildcard patterns and matches wildcard tail", () => {
+    const match = LaghuRouter.compile("/files/*");
+    expect(match("/files/sub/dir/file.txt")).toEqual({ wild: "sub/dir/file.txt" });
+  });
+
+  it("handles render errors gracefully and executes afterEach hooks", async () => {
+    (window as any).Laghu = Laghu;
+    document.body.innerHTML = `<div id="err-view"></div>`;
+    let hookRan = false;
+    LaghuRouter.afterEach(() => {
+      hookRan = true;
+    });
+
+    const stop = LaghuRouter.route({
+      target: "#err-view",
+      scope: {},
+      routes: [
+        {
+          path: "/throw",
+          render: () => {
+            throw new Error("render fail");
+          },
+        },
+      ],
+    });
+
+    window.location.hash = "#/throw";
+    await tick(30);
+    expect(document.querySelector("#err-view")!.textContent).toBe("");
+
+    window.location.hash = "";
+    await tick(30);
+    expect(LaghuRouter.current().path).toBe("/");
+    expect(hookRan).toBe(true);
+    stop();
+  });
+
+  it("covers navigate, hash fallback, beforeEach abort, guard abort, notfound fn, and hook errors", async () => {
+    (window as any).Laghu = {
+      eval: Laghu.eval,
+      swap: Laghu.swap,
+    };
+    document.body.innerHTML = `
+      <div id="router-view">
+        <template data-route="/secret" data-route-if="allowed">Secret Content</template>
+      </div>
+    `;
+
+    LaghuRouter.afterEach(() => {
+      throw new Error("hook boom");
+    });
+
+    const stop = LaghuRouter.route({
+      target: "#router-view",
+      scope: { allowed: false },
+      beforeEach(to: any) {
+        if (to.path === "/blocked") return false;
+      },
+      afterEach() {
+        throw new Error("opts boom");
+      },
+      notfound(to) {
+        return `<div>Custom 404: ${to.path}</div>`;
+      },
+      routes: [
+        {
+          path: "/public",
+          render: () => "Public Page",
+        },
+      ],
+    });
+
+    // test location.hash = "#" (empty after #)
+    window.location.hash = "#";
+    await tick(30);
+    expect(LaghuRouter.current().path).toBe("/");
+    expect(document.querySelector("#router-view")!.textContent).toContain("Custom 404: /");
+
+    // test navigate
+    LaghuRouter.navigate("/public");
+    await tick(30);
+    expect(LaghuRouter.current().path).toBe("/public");
+    expect(document.querySelector("#router-view")!.textContent).toBe("Public Page");
+
+    // test beforeEach blocking
+    LaghuRouter.navigate("/blocked");
+    await tick(30);
+    expect(LaghuRouter.current().path).toBe("/public");
+
+    // test decl route guard blocking
+    LaghuRouter.navigate("/secret");
+    await tick(30);
+    expect(LaghuRouter.current().path).toBe("/public");
+
+    // allow and enter declarative route with fallback scope (B.scope undefined)
+    (window as any).Laghu.scope = undefined;
+    stop();
+
+    document.body.innerHTML = `
+      <div id="router-view">
+        <template data-route="/secret" data-route-if="allowed">Secret Content</template>
+      </div>
+    `;
+    const stop2 = LaghuRouter.route({
+      target: "#router-view",
+      scope: { allowed: true },
+    });
+    LaghuRouter.navigate("/secret");
+    await tick(30);
+    expect(document.querySelector("#router-view")!.textContent).toContain("Secret Content");
+
+    stop2();
+    window.location.hash = "#/";
+  });
+
+  it("covers compile fallbacks, default route options, missing targets, falsy returns, and SSR guards", async () => {
+    // 1. compile fallbacks
+    const matchEmpty = LaghuRouter.compile(undefined as any);
+    expect(matchEmpty("")).toEqual({});
+
+    const matchWild = LaghuRouter.compile("/items/:category/*");
+    expect(matchWild("/items/books/fiction/sci-fi")).toEqual({
+      category: "books",
+      wild: "fiction/sci-fi",
+    });
+
+    // 2. default route options and missing target element
+    document.body.innerHTML = "";
+    const stopDefault = LaghuRouter.route();
+    stopDefault();
+
+    // 3. route render and notfound returning falsy
+    document.body.innerHTML = `<div id="empty-view"></div>`;
+    const stopEmpty = LaghuRouter.route({
+      target: "#empty-view",
+      routes: [
+        {
+          path: "/blank",
+          render: () => undefined as any,
+        },
+      ],
+      notfound: () => undefined as any,
+    });
+    LaghuRouter.navigate("/blank");
+    await tick(30);
+    expect(document.querySelector("#empty-view")!.textContent).toBe("");
+
+    LaghuRouter.navigate("/nonexistent-missing");
+    await tick(30);
+    expect(document.querySelector("#empty-view")!.textContent).toBe("");
+    stopEmpty();
+
+    // 4. hash without leading '#' and window without Laghu
+    const origLaghu = (window as any).Laghu;
+    delete (window as any).Laghu;
+    window.location.hash = "plain-hash-without-prefix";
+    const stopNoLaghu = LaghuRouter.route({
+      target: "#empty-view",
+      routes: [{ path: "plain-hash-without-prefix", render: () => "Plain" }],
+    });
+    await tick(30);
+    stopNoLaghu();
+    (window as any).Laghu = origLaghu;
+
+    // 5. template without data-route and template with empty data-route
+    document.body.innerHTML = `<div id="tpl-view"><template>Ignored</template><template data-route="">Blank</template></div>`;
+    const stopTpl = LaghuRouter.route({ target: "#tpl-view" });
+    stopTpl();
+
+    // 6. SSR guards when window and document are undefined
+    const origWin = (globalThis as any).window;
+    const origDoc = (globalThis as any).document;
+    delete (globalThis as any).window;
+    delete (globalThis as any).document;
+    try {
+      const stopSSR = LaghuRouter.route();
+      stopSSR();
+      LaghuRouter.navigate("/ssr");
+    } finally {
+      (globalThis as any).window = origWin;
+      (globalThis as any).document = origDoc;
+    }
+  });
 });
+
+
+

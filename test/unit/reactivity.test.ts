@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vite-plus/test";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { Laghu } from "../../src/laghu";
 import { tick } from "../setup";
 
@@ -123,5 +123,139 @@ describe("watch", () => {
     s.qty = 6;
     await tick();
     expect(seen).toEqual([[6, 5]]);
+  });
+
+  it("triggers effects on deleteProperty", async () => {
+    const s = Laghu.reactive({ tag: "old" } as any);
+    let seen = "";
+    Laghu.effect(() => {
+      seen = s.tag ?? "none";
+    });
+    expect(seen).toBe("old");
+    delete s.tag;
+    await tick();
+    expect(seen).toBe("none");
+  });
+});
+
+describe("store and persist", () => {
+  it("registers global stores and supports $store path get and set", () => {
+    const cart = Laghu.store("shopCart", { count: 1, nested: { item: "pen" } });
+    expect(cart.count).toBe(1);
+    expect(Laghu.get({}, "$store.shopCart.count")).toBe(1);
+    expect(Laghu.get({}, "$store.shopCart.nested.item")).toBe("pen");
+    expect(Laghu.get({}, "$store.nonExistent.item")).toBeUndefined();
+    expect(Laghu.get({}, "$store.shopCart.__proto__.pollute")).toBeUndefined();
+
+    Laghu.set({}, "$store.shopCart.count", 3);
+    expect(cart.count).toBe(3);
+    Laghu.set({}, "$store.shopCart.nested.item", "book");
+    expect(cart.nested.item).toBe("book");
+  });
+
+  it("persists stores to localStorage with versioning", async () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "test:settings",
+      JSON.stringify({
+        v: 1,
+        state: { theme: "dark" },
+      })
+    );
+
+    const settings = Laghu.store("settings", { theme: "light" });
+    Laghu.persist("settings", { key: "test:settings", version: 1, debounce: 5 });
+    expect(settings.theme).toBe("dark");
+
+    settings.theme = "sepia";
+    await tick(30);
+    expect(localStorage.getItem("test:settings")).toContain("sepia");
+    expect(Laghu.persist("unknownStore", {})).toBeNull();
+  });
+
+  it("creates child scopes with Laghu.scope", () => {
+    const parent = { base: 10 };
+    const child = Laghu.scope(parent, { extra: 20 });
+    expect(child.base).toBe(10);
+    expect(child.extra).toBe(20);
+  });
+
+  it("handles effect error during microtask flush", async () => {
+    const s = Laghu.reactive({ count: 0, boom: false });
+    let errors: any[] = [];
+    const handler = (e: any) => errors.push(e.detail.error);
+    document.addEventListener("laghu:error", handler);
+
+    Laghu.effect(() => {
+      if (s.boom) throw new Error("flush explosion");
+      s.count;
+    });
+
+    s.boom = true;
+    s.count = 1;
+    await tick();
+
+    expect(errors.some((msg) => msg.includes("flush explosion"))).toBe(true);
+    document.removeEventListener("laghu:error", handler);
+  });
+
+  it("handles persist when localStorage is undefined or setItem throws", async () => {
+    const storeObj = Laghu.store("unstableStore", { val: 1 });
+    let errors: any[] = [];
+    const handler = (e: any) => errors.push(e.detail.error);
+    document.addEventListener("laghu:error", handler);
+
+    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(() => {
+      throw new Error("quota exceeded");
+    });
+
+    Laghu.persist("unstableStore", { key: "unstable:key", debounce: 5 });
+    storeObj.val = 2;
+    await tick(50);
+
+    expect(errors.some((msg) => msg.includes("quota exceeded"))).toBe(true);
+    spy.mockRestore();
+
+    // Now test when localStorage is undefined
+    const origStorage = (globalThis as any).localStorage;
+    delete (globalThis as any).localStorage;
+
+    storeObj.val = 3;
+    await tick(50);
+
+    (globalThis as any).localStorage = origStorage;
+    document.removeEventListener("laghu:error", handler);
+  });
+
+  it("covers watch when next equals prev, persist without opts, and scope without vars", async () => {
+    const s = Laghu.reactive({ a: 1, b: 2 });
+    let watchFired = 0;
+    Laghu.watch(s, "a + (b - b)", () => {
+      watchFired++;
+    });
+    s.b = 99;
+    await tick();
+    expect(watchFired).toBe(0);
+
+    s.a = 2;
+    await tick();
+    expect(watchFired).toBe(1);
+
+    // Persist without options:
+    Laghu.store("noOptStore", { count: 10 });
+    const pSt = Laghu.persist("noOptStore");
+    expect(pSt).toBeDefined();
+
+    // Persist when localStorage is completely undefined:
+    const origStorage = (globalThis as any).localStorage;
+    delete (globalThis as any).localStorage;
+    Laghu.store("noStorageStore", { count: 20 });
+    const pSt2 = Laghu.persist("noStorageStore");
+    expect(pSt2).toBeDefined();
+    (globalThis as any).localStorage = origStorage;
+
+    // Laghu.scope without vars:
+    const child = Laghu.scope({ x: 1 }, undefined as any);
+    expect(child.x).toBe(1);
   });
 });

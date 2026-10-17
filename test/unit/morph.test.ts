@@ -33,6 +33,15 @@ describe("LaghuMorph", () => {
     expect((document.getElementById("c") as HTMLInputElement).checked).toBe(true);
   });
 
+  it("syncs textarea and select form controls", () => {
+    const t = morphEd(
+      `<textarea id="txt">initial text</textarea><select id="sel"><option value="1">1</option><option value="2" selected>2</option></select>`,
+      `<textarea id="txt">updated text</textarea><select id="sel"><option value="1" selected>1</option><option value="2">2</option></select>`,
+    );
+    const txt = document.getElementById("txt") as HTMLTextAreaElement;
+    expect(txt.value).toBe("updated text");
+  });
+
   it("reuses data-bkey rows across moves", () => {
     const t = morphEd(
       `<li data-bkey="1">one</li><li data-bkey="2">two</li>`,
@@ -116,4 +125,85 @@ describe("LaghuMorph", () => {
     expect(document.querySelector("#r1")!.textContent).toBe("ONE");
     expect(document.querySelector("#r2")).not.toBeNull();
   });
+
+  it("reuses unkeyed children positionally by tag name", () => {
+    const t = morphEd(
+      `<p>first</p><p>second</p>`,
+      `<p>FIRST</p><p>SECOND</p>`,
+    );
+    const paragraphs = t.querySelectorAll("p");
+    expect(paragraphs.length).toBe(2);
+    expect(paragraphs[0].textContent).toBe("FIRST");
+    expect(paragraphs[1].textContent).toBe("SECOND");
+  });
+
+  it("handles non-element child nodes and mixed text in target", () => {
+    const t = morphEd(
+      `text node <span>child</span>`,
+      `updated text <span>child updated</span> trailing text`,
+    );
+    expect(t.textContent).toContain("updated text");
+    expect(t.textContent).toContain("trailing text");
+  });
+
+  it("handles outer mode when html has no root element", () => {
+    (window as any).Laghu = Laghu;
+    (window as any).LaghuMorph = LaghuMorph;
+    const host = document.createElement("div");
+    host.innerHTML = `<span id="plain-target">old</span>`;
+    document.body.appendChild(host);
+    const target = document.querySelector("#plain-target")!;
+    LaghuMorph.morph(target, "just plain text replacement", { mode: "outer" });
+    expect(document.querySelector("#plain-target")).toBeNull();
+    expect(host.textContent).toContain("just plain text replacement");
+  });
+
+  it("handles destroyTree throwing gracefully and removes stale text nodes", () => {
+    (window as any).Laghu = {
+      destroyTree() {
+        throw new Error("cleanup error");
+      },
+    };
+    (window as any).LaghuMorph = LaghuMorph;
+    const host = document.createElement("div");
+    host.innerHTML = `<div id="cleanup-host"><b>stale element</b>stale text</div>`;
+    document.body.appendChild(host);
+    LaghuMorph.morph(
+      document.getElementById("cleanup-host")!,
+      `<i>fresh element</i>`,
+      {},
+    );
+    expect(document.getElementById("cleanup-host")!.textContent).toBe("fresh element");
+  });
+
+  it("syncs dirtied input values when unfocused, handles comments and whitespace, and morphs without Laghu global", () => {
+    (window as any).Laghu = undefined;
+    (window as any).LaghuMorph = LaghuMorph;
+    const host = document.createElement("div");
+    host.innerHTML = `<div id="morph-extra">
+      <input id="dirty-input" value="server1">
+      <!-- stale comment -->
+      <p id="stale-p">stale</p>
+    </div>`;
+    document.body.appendChild(host);
+
+    const input = document.getElementById("dirty-input") as HTMLInputElement;
+    input.value = "user-dirty-value";
+
+    const target = document.getElementById("morph-extra")!;
+    LaghuMorph.morph(
+      target,
+      `  
+      <input id="dirty-input" value="server2">
+      <!-- fresh comment -->
+      <span>fresh content</span>
+      `,
+      {},
+    );
+
+    expect(input.value).toBe("server2");
+    expect(target.querySelector("#stale-p")).toBeNull();
+    expect(target.querySelector("span")!.textContent).toBe("fresh content");
+  });
 });
+

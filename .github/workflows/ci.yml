@@ -47,8 +47,8 @@ jobs:
       - name: Size budgets
         run: npm run size
 
-      - name: Test suites
-        run: npm test
+      - name: Test suites & coverage gate
+        run: npm run test:coverage
 
       - name: Architectural boundaries
         run: node .agents/scripts/boundary_guard.js

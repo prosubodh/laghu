@@ -38,6 +38,43 @@ describe(" Laghu.swap modes", () => {
     Laghu.swap(box(), "<p>plain</p>", "text", s);
     expect(box().querySelectorAll("p").length).toBe(0);
     expect(box().textContent).toContain("plain");
+
+    // test delete
+    const delTarget = document.createElement("div");
+    delTarget.innerHTML = `<span id="del-me">bye</span>`;
+    box().appendChild(delTarget);
+    Laghu.swap(document.getElementById("del-me")!, "", "delete", s);
+    expect(document.getElementById("del-me")).toBeNull();
+
+    // test outer
+    const outerTarget = document.createElement("div");
+    outerTarget.id = "outer-box";
+    box().appendChild(outerTarget);
+    Laghu.swap(
+      document.getElementById("outer-box")!,
+      `<section id="fresh-sec">fresh</section>`,
+      "outer",
+      s,
+    );
+    expect(document.getElementById("outer-box")).toBeNull();
+    expect(document.getElementById("fresh-sec")).not.toBeNull();
+
+    // test beforebegin and afterend
+    const mid = document.createElement("span");
+    mid.id = "mid-span";
+    box().appendChild(mid);
+    Laghu.swap(mid, `<i id="bb-node">bb</i>`, "beforebegin", s);
+    expect(mid.previousElementSibling!.id).toBe("bb-node");
+    Laghu.swap(mid, `<b id="ae-node">ae</b>`, "afterend", s);
+    expect(mid.nextElementSibling!.id).toBe("ae-node");
+
+    // test morph without LaghuMorph global
+    const origMorph = (window as any).LaghuMorph;
+    (window as any).LaghuMorph = null;
+    (window as any).__LAGHU_DEV__ = true;
+    Laghu.swap(box(), `<p id="morph-fallback">fallback</p>`, "morph", s);
+    expect(document.getElementById("morph-fallback")).not.toBeNull();
+    (window as any).LaghuMorph = origMorph;
   });
 
   it("preserves data-preserve nodes by identity", async () => {
@@ -283,4 +320,319 @@ describe("declarative fetch", () => {
     await tick(20);
     expect(cancelled).toBe(true);
   });
+
+  it("handles put, patch, delete, headers, form array fields, and missing target", async () => {
+    let lastMethod = "";
+    let lastHeaders: any = {};
+    let lastBody: any = null;
+
+    vi.stubGlobal("fetch", async (url: string, opts: any) => {
+      lastMethod = opts.method;
+      lastHeaders = opts.headers;
+      lastBody = opts.body;
+      return json({ ok: true });
+    });
+
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <form id="fetch-form">
+        <input name="tag" value="t1">
+        <input name="tag" value="t2">
+        <button id="btn-put" data-put="/item/1" data-headers='{"X-Custom": "val"}'></button>
+        <button id="btn-patch" data-patch="/item/2"></button>
+        <button id="btn-del" data-delete="/item/3"></button>
+        <button id="btn-method" data-get="/item/4" data-method="HEAD"></button>
+        <button id="btn-miss" data-get="/item/5" data-target="#missing-target"></button>
+      </form>
+    `;
+    document.body.appendChild(root);
+    Laghu.hydrate(root, {}, {});
+
+    // PUT with headers and form serialization
+    (document.querySelector("#btn-put") as HTMLElement).click();
+    await tick(30);
+    expect(lastMethod).toBe("PUT");
+    expect(lastHeaders["X-Custom"]).toBe("val");
+    const parsedBody = JSON.parse(lastBody);
+    expect(parsedBody.tag).toEqual(["t1", "t2"]);
+
+    // PATCH
+    (document.querySelector("#btn-patch") as HTMLElement).click();
+    await tick(30);
+    expect(lastMethod).toBe("PATCH");
+
+    // DELETE
+    (document.querySelector("#btn-del") as HTMLElement).click();
+    await tick(30);
+    expect(lastMethod).toBe("DELETE");
+
+    // data-method HEAD override
+    (document.querySelector("#btn-method") as HTMLElement).click();
+    await tick(30);
+    expect(lastMethod).toBe("HEAD");
+
+    // missing target returns early
+    (document.querySelector("#btn-miss") as HTMLElement).click();
+    await tick(30);
+
+    // destroyTree on element with _bReq
+    let aborted = false;
+    const reqHost: any = document.createElement("div");
+    reqHost._bReq = {
+      abort() {
+        aborted = true;
+      },
+    };
+    Laghu.destroyTree(reqHost);
+    expect(aborted).toBe(true);
+    expect(reqHost._bReq).toBeNull();
+  });
+
+  it("covers default GET method, queue:first/none, indicators, data-disable, and error reset", async () => {
+    let callCount = 0;
+    let lastMethod = "";
+    vi.stubGlobal("fetch", (url: string, opts: any) => {
+      callCount++;
+      lastMethod = opts.method;
+      return new Promise((res) => {
+        setTimeout(() => {
+          res(json({ success: true }));
+        }, 40);
+      });
+    });
+
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <div id="loader-spin" hidden>Loading...</div>
+      <button id="btn-default-get" data-get="/api/default" data-method="">Default</button>
+      <button id="btn-qfirst" data-get="/api/first" data-trigger="click queue:first">First</button>
+      <button id="btn-qnone" data-get="/api/none" data-trigger="click queue:none">None</button>
+      <button id="btn-with-ind" data-get="/api/ind" data-indicator="#loader-spin" data-disable>Ind</button>
+    `;
+    document.body.appendChild(root);
+
+    const state: any = Laghu.hydrate(root, { $error: { status: 500 } });
+    await tick();
+
+    // 1. default GET method
+    (document.querySelector("#btn-default-get") as HTMLElement).click();
+    await tick(10);
+    expect(lastMethod).toBe("GET");
+
+    // 2. queue first drops second click while pending
+    const btnFirst = document.querySelector("#btn-qfirst") as HTMLElement;
+    btnFirst.click();
+    btnFirst.click(); // dropped
+    expect(callCount).toBe(2);
+
+    // 3. queue none drops second click while pending
+    const btnNone = document.querySelector("#btn-qnone") as HTMLElement;
+    btnNone.click();
+    btnNone.click(); // dropped
+    expect(callCount).toBe(3);
+
+    // 4. indicator and data-disable toggles
+    const spinner = document.getElementById("loader-spin")!;
+    const btnInd = document.getElementById("btn-with-ind") as HTMLButtonElement;
+    expect(spinner.hidden).toBe(true);
+    expect(btnInd.disabled).toBe(false);
+
+    btnInd.click();
+    expect(spinner.hidden).toBe(false);
+    expect(btnInd.disabled).toBe(true);
+
+    // wait for requests to complete
+    await tick(60);
+    expect(spinner.hidden).toBe(true);
+    expect(btnInd.disabled).toBe(false);
+
+    // 5. error reset to null on success
+    expect(state.$error).toBeNull();
+
+    // 6. rehydrating elements with data-fetch hits claimed guard
+    Laghu.hydrate(root, state);
+  });
+
+  it("handles invalid data-vals, form+vals merge on POST, double finish on json error, and missing target", async () => {
+    let lastBody: any = null;
+    let lastHeaders: any = null;
+
+    vi.stubGlobal("fetch", async (url: string, opts: any) => {
+      lastBody = opts && opts.body ? JSON.parse(opts.body) : null;
+      lastHeaders = opts && opts.headers;
+
+      if (String(url).includes("/throw-json")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => "application/json" },
+          json: async () => {
+            throw new Error("malformed json stream");
+          },
+        };
+      }
+      if (String(url).includes("/text-html")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => "text/html" },
+          text: async () => "<div>replacement</div>",
+        };
+      }
+      return json({ success: true });
+    });
+
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <form id="merge-form">
+        <input name="user" value="alice">
+        <button type="button" id="btn-merge-post" data-post="/api/merge" data-vals='{"role":"admin"}'>Merge</button>
+      </form>
+      <button id="btn-bad-vals" data-get="/api/bad-vals" data-vals="[not valid json">Bad Vals</button>
+      <button id="btn-throw-json" data-get="/api/throw-json">Throw JSON</button>
+      <button id="btn-bad-tgt" data-get="/api/text-html" data-target="#nowhere-found">Bad Tgt</button>
+    `;
+    document.body.appendChild(root);
+
+    const state: any = Laghu.hydrate(root, {});
+    await tick();
+
+    // 1. form + data-vals merge on POST
+    (document.getElementById("btn-merge-post") as HTMLElement).click();
+    await tick(20);
+    expect(lastHeaders["Content-Type"]).toBe("application/json");
+    expect(lastBody).toEqual({ user: "alice", role: "admin" });
+
+    // 2. invalid data-vals falls back gracefully
+    (document.getElementById("btn-bad-vals") as HTMLElement).click();
+    await tick(20);
+
+    // 3. json() throw in response triggers double finish guard
+    (document.getElementById("btn-throw-json") as HTMLElement).click();
+    await tick(20);
+    expect(state.$error.message).toContain("malformed json stream");
+
+    // 4. text response with missing data-target selector returns early
+    (document.getElementById("btn-bad-tgt") as HTMLElement).click();
+    await tick(20);
+  });
+
+  it("covers fetch edge branches: form element vals, standalone vals, no-form post, bad headers, null ct, missing select, self target, query param append, string rejection, 3 multi-inputs, and empty fetch attrs", async () => {
+    let capturedUrl = "";
+    let capturedBody: any = null;
+
+    vi.stubGlobal("fetch", async (url: string, opts: any) => {
+      capturedUrl = String(url);
+      capturedBody = opts && opts.body ? JSON.parse(opts.body) : null;
+      if (capturedUrl.includes("/api/null-ct")) {
+        return { ok: true, status: 200, headers: { get: () => null }, text: async () => "<p>no-ct</p>" };
+      }
+      if (capturedUrl.includes("/api/missing-select")) {
+        return { ok: true, status: 200, headers: { get: () => "text/html" }, text: async () => "<div><p id='other'>p</p></div>" };
+      }
+      if (capturedUrl.includes("/api/string-reject")) {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        return Promise.reject("fetch failed with plain string");
+      }
+      return json({ ok: true });
+    });
+
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <form id="f-host" data-post="/api/form-host" data-vals="form">
+        <input name="email" value="form@host.com">
+      </form>
+      <button id="btn-stand-vals" data-post="/api/stand-vals" data-vals="form">Stand</button>
+      <button id="btn-no-form-post" data-post="/api/no-form">NoForm</button>
+      <button id="btn-bad-hdr" data-get="/api/bad-hdr" data-headers="not-valid-json">Hdr</button>
+      <button id="btn-null-ct" data-get="/api/null-ct" data-target="#null-ct-target">NullCT</button>
+      <div id="null-ct-target"></div>
+      <button id="btn-missing-sel" data-get="/api/missing-select" data-select="#non-existent" data-target="#sel-target">Sel</button>
+      <div id="sel-target">initial</div>
+      <button id="btn-self-target" data-get="/api/null-ct">SelfTarget</button>
+      <button id="btn-query-amp" data-get="/api/search?existing=1" data-vals='{"tag":"tech"}'>Query</button>
+      <button id="btn-str-rej" data-get="/api/string-reject">StrRej</button>
+      <form id="f-multi">
+        <input name="item" value="a">
+        <input name="item" value="b">
+        <input name="item" value="c">
+        <button type="button" id="btn-multi-3" data-post="/api/multi-3" data-vals="form">Multi</button>
+      </form>
+      <div id="empty-get" data-get=""></div>
+      <div id="empty-post" data-post=""></div>
+      <div id="empty-put" data-put=""></div>
+      <div id="empty-patch" data-patch=""></div>
+      <div id="empty-del" data-delete=""></div>
+    `;
+    document.body.appendChild(root);
+
+    const state: any = Laghu.hydrate(root, {});
+    await tick();
+
+    // 1. form element with data-vals="form"
+    const fHost = document.getElementById("f-host") as HTMLFormElement;
+    fHost.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await tick(20);
+    expect(capturedBody).toEqual({ email: "form@host.com" });
+
+    // 2. standalone button with data-vals="form"
+    (document.getElementById("btn-stand-vals") as HTMLElement).click();
+    await tick(20);
+    expect(capturedBody).toEqual({});
+
+    // 3. standalone button with data-post without form
+    (document.getElementById("btn-no-form-post") as HTMLElement).click();
+    await tick(20);
+
+    // 4. data-headers with invalid json
+    (document.getElementById("btn-bad-hdr") as HTMLElement).click();
+    await tick(20);
+
+    // 5. null content-type header
+    (document.getElementById("btn-null-ct") as HTMLElement).click();
+    await tick(20);
+    expect(document.getElementById("null-ct-target")!.innerHTML).toContain("no-ct");
+
+    // 6. data-select matching nothing
+    (document.getElementById("btn-missing-sel") as HTMLElement).click();
+    await tick(20);
+    expect(document.getElementById("sel-target")!.innerHTML).toBe("");
+
+    // 7. self target
+    (document.getElementById("btn-self-target") as HTMLElement).click();
+    await tick(20);
+    expect(document.getElementById("btn-self-target")!.innerHTML).toContain("no-ct");
+
+    // 8. query param append (&)
+    (document.getElementById("btn-query-amp") as HTMLElement).click();
+    await tick(20);
+    expect(capturedUrl).toContain("existing=1&tag=tech");
+
+    // 9. string rejection error
+    (document.getElementById("btn-str-rej") as HTMLElement).click();
+    await tick(20);
+    expect(state.$error.message).toContain("fetch failed with plain string");
+
+    // 10. multi-3 inputs (Array.isArray true on 3rd item)
+    (document.getElementById("btn-multi-3") as HTMLElement).click();
+    await tick(20);
+    expect(capturedBody.item).toEqual(["a", "b", "c"]);
+
+    // 11. Empty fetch attributes trigger
+    (document.getElementById("empty-get") as HTMLElement).click();
+    (document.getElementById("empty-post") as HTMLElement).click();
+    (document.getElementById("empty-put") as HTMLElement).click();
+    (document.getElementById("empty-patch") as HTMLElement).click();
+    (document.getElementById("empty-del") as HTMLElement).click();
+    await tick(20);
+
+    // 12. Test fetch without AbortController
+    vi.stubGlobal("AbortController", undefined);
+    (document.getElementById("btn-no-form-post") as HTMLElement).click();
+    await tick(20);
+    vi.unstubAllGlobals();
+
+    root.remove();
+  });
 });
+
