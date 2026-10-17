@@ -100,7 +100,7 @@ To prevent context bloat and keep prompt overhead minimal, detailed engineering 
   - [`relentless-questioner`](.agents/skills/relentless-questioner/SKILL.md): Dynamic context-aware interrogation loops before planning and coding.
 - **Relentless Skill Architecture Inquiry:** Never author or update skills on assumptions. Interrogate all 7 inquiry branches (placement, trigger intent, domain truth, gotchas/anti-patterns, determinism, progressive bloat, verification loop) defined in [docs/rules/agentic_configuration.md](./docs/rules/agentic_configuration.md) before writing `SKILL.md`.
 - **Workspace Memory & Knowledge Hub:** Consult [`memory.md`](./memory.md) for ADRs, and [`docs/knowledge/ubiquitous_language.md`](./docs/knowledge/ubiquitous_language.md) for domain glossaries.
-- **Harness Parity & Symlinks:** `AGENTS.md`, `CLAUDE.md`, `agents.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, and `.github/copilot-instructions.md` must remain identical via filesystem symbolic links to eliminate configuration divergence across different agent harnesses.
+- **Harness Parity:** `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, and `.windsurfrules` are committed byte-identical copies of `AGENTS.md`; `agents.md` resolves to it case-insensitively and `.github/copilot-instructions.md` is a text pointer. Symlinks need Developer Mode on Windows, so `validate` enforces content parity instead (ADR-007).
 
 ## 5. Vite+ Toolchain (laghu)
 - Unified toolchain (`vite-plus` 1.2.0): `vp <name>` runs a built-in, `vp run <name>` runs a `package.json` script or `vite.config.ts` task.

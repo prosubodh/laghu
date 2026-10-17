@@ -7,12 +7,42 @@ Clean slate per lets-build: no template ADRs carried over.
 
 | ADR                                                                                | Title                                               | Date       | Status                | Governs                                |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------- | ---------- | --------------------- | -------------------------------------- |
+| [ADR-007](./memory.md#adr-007-enforce-harness-parity-by-content-not-symlinks)      | Enforce harness parity by content, not symlinks     | 2026-10-17 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
 | [ADR-006](./memory.md#adr-006-cross-platform-toolchain-fix-and-governance-re-sync) | Cross-platform toolchain fix and governance re-sync | 2026-10-17 | ACCEPTED              | [`package.json`](./package.json)       |
 | [ADR-005](./memory.md#adr-005-adopt-azcodr-governance-keep-laghu-code)             | Adopt azcodr governance, keep laghu code            | 2026-10-16 | ACCEPTED              | [`AGENTS.md`](./AGENTS.md)             |
 | [ADR-004](./memory.md#adr-004-azcodr-check-triage-scope-boundary)                  | azcodr check triage scope boundary                  | 2026-10-16 | SUPERSEDED by ADR-005 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | [ADR-003](./memory.md#adr-003-vitest-tdd-units-against-src)                        | Vitest TDD, units against src                       | 2026-10-16 | ACCEPTED              | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | [ADR-002](./memory.md#adr-002-typescript-source-zero-build-consumption)            | TypeScript source, zero-build consumption           | 2026-10-16 | ACCEPTED              | [`tsconfig.json`](./tsconfig.json)     |
 | [ADR-001](./memory.md#adr-001-target-technology-stack-scaffolding-baseline)        | Target Technology Stack & Scaffolding Baseline      | 2026-10-16 | ACCEPTED              | [`README.md`](./README.md)             |
+
+#### ADR-007: Enforce harness parity by content, not symlinks
+
+- **Date:** 2026-10-17 | **Status:** ACCEPTED
+- **Context:** the vendored `docs/rules/agentic_configuration.md` (section 3)
+  and the harness bullet in [`AGENTS.md`](./AGENTS.md) both standardise on
+  filesystem symbolic links (`ln -sf AGENTS.md CLAUDE.md`), and forbid
+  duplicating content across harness files. This workspace cannot
+  materialise one: `core.symlinks` is `false`, and creating a symlink fails
+  for want of administrator privilege (Windows needs Developer Mode or
+  elevation). Committed symlinks would therefore check out as plain files
+  holding the literal text `AGENTS.md` — the exact divergence the standard
+  exists to prevent. `agents.md` cannot coexist with `AGENTS.md` at all on a
+  case-insensitive filesystem.
+- **Decision:** keep `CLAUDE.md`, `GEMINI.md`, `.cursorrules` and
+  `.windsurfrules` as committed byte-identical copies of `AGENTS.md`, and
+  keep `.github/copilot-instructions.md` as a one-line text pointer.
+  `agents.md` stays satisfied natively by `AGENTS.md` case-insensitively.
+  `npm run validate` is the enforcement:
+  [`scripts/validate/parity.js`](./scripts/validate/parity.js) fails any
+  harness file that drifts from `AGENTS.md`, on every platform, which is the
+  outcome the symlink standard exists to produce.
+- **Consequences:** zero configuration divergence across harnesses is
+  enforced deterministically in CI instead of depending on developer-mode
+  privileges, and the vendored validator reports the copies as a Windows
+  symlink fallback warning rather than a failure. Accepted trade-off: four
+  committed files repeat `AGENTS.md`'s body on disk, so every `AGENTS.md`
+  edit must be mirrored — the gate catches a missed mirror immediately.
+- **Enforced In:** [`scripts/validate/parity.js`](./scripts/validate/parity.js), [`AGENTS.md`](./AGENTS.md).
 
 #### ADR-006: Cross-platform toolchain fix and governance re-sync
 
