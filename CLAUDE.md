@@ -2,7 +2,7 @@
 
 > **azcodr: Architecture governance toolkit, with an optional starter**  
 > **Workspace Mission:** Problem-first, topology-aligned production architectures governed by strict systemic atomicity, 100% open-source standards, true incremental TDD nano-cycles, and zero speculative bloat.  
-> **Runtime & Tools:** Node.js (`>=22.8.0`), npm (`>=10.0.0`) | `npm test` (test runner), `npm run test:coverage` (coverage gate), `npm run lint`, `npm run validate`.
+> **Runtime & Tools:** Node.js (`>=22.8.0`), npm (`>=10.0.0`) | `npm test` (test runner), `npm run test:coverage` (coverage report), `npm run lint`, `npm run validate`.
 > **Node floor rationale:** `>=22.8.0` satisfies Jest native ESM requirements (`--experimental-vm-modules`) and modern LTS security baselines. Node 18 (EOL 2025-04-30) and 20 (EOL 2026-04-30) no longer receive security patches.  
 > **Rule Zero:** Assume nothing. Every action must be grounded in verified evidence from this workspace or direct instructions from the user.  
 > **Atomicity Mandate:** All rules, skills, code units, migrations, and transactions must be strictly atomic (indivisible, self-contained, composable with full ACID safety).  

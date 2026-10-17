@@ -1,6 +1,6 @@
 {
   "name": "laghu",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Zero-build drop-in micro-framework: Light-DOM Web Components + Proxy reactivity + JSON-into-state fetch",
   "keywords": [
     "csp",
@@ -37,6 +37,7 @@
     "validate": "node scripts/validate-cli.js",
     "build": "tsc -p tsconfig.build.json && node scripts/size.mjs",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "size": "node scripts/size.mjs",
     "prepublishOnly": "npm run check && npm run test && npm run build",
     "prepare": "vp config"

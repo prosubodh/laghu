@@ -121,7 +121,7 @@ declare global {
 
 export const Laghu: LaghuAPI = (() => {
   "use strict";
-  var VERSION = "1.1.0";
+  var VERSION = "1.2.0";
   // Opt-in dev noise. Production stays silent unless handlers listen
   // for laghu:error / laghu:request-error, which always dispatch.
   var DEV = typeof window !== "undefined" && (window as any).__LAGHU_DEV__ === true;

@@ -6,6 +6,8 @@ major for breaking changes.
 
 ## [Unreleased]
 
+## [1.2.0]
+
 Declarative push:
 
 - Display filters: `data-bind="price | currency"` with nine
@@ -21,6 +23,19 @@ Declarative push:
 - Forms owning a declarative fetch stop their native submit.
 - First application of a toggle is instant (no opening animation
   on initial render); reduced-motion handling unchanged.
+
+Toolchain (no library behavior change):
+
+- `npm run lint` (`vp lint`) and `npm run validate`
+  (`node scripts/validate-cli.js`) now exist, so the `hooks.json`
+  post-tool lint hook and the Stop verifier run instead of erroring or
+  skipping silently. Generated `dist/` is excluded from lint.
+- `npm run test:coverage` reports V8 coverage of `src/`; no threshold
+  is enforced.
+- The vendored scaffolder is now upstream's `bootstrap_workspace.mjs`
+  (azcodr 2.8.0), which resolves `HOME` correctly on Windows. The three
+  inert POSIX-only `.sh` scripts laghu dropped stay dropped
+  (`memory.md` ADR-006).
 
 ## [1.1.0]
 

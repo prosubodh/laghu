@@ -3,7 +3,7 @@
   // src/laghu.ts
   var Laghu = (() => {
     "use strict";
-    var VERSION = "1.1.0";
+    var VERSION = "1.2.0";
     var DEV = typeof window !== "undefined" && window.__LAGHU_DEV__ === true;
     var stores = /* @__PURE__ */ new Map();
     var directives = /* @__PURE__ */ new Map();

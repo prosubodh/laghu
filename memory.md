@@ -20,17 +20,23 @@ Clean slate per lets-build: no template ADRs carried over.
 - Context: the vendored `hooks.json` post-tool-lint hook runs
   `npm run lint`, and `verify_completion.js` runs `npm run validate`
   but silently skips it when the script is absent
-  (`typeof scripts.validate === "string"`). Neither script existed, so
-  every command errored in the hook and the Stop gate skipped its
-  checks without saying so. Four POSIX-only `.sh` files were also
+  (`typeof scripts.validate === "string"`). It calls `npm run
+  test:coverage` with the same guard, and `AGENTS.md` advertised that as
+  a "coverage gate" although neither the script nor any threshold
+  existed. None of the three scripts were present, so every command
+  errored in the hook and the Stop gate skipped its checks without
+  saying so. Four POSIX-only `.sh` files were also
   inherited from the azcodr 2.7.1 scaffold, though this repo's stated
   requirement is cross-platform tooling. Upstream then fixed the
   scaffolder itself: azcodr 2.8.0 (ADR-023) ships
   `bootstrap_workspace.mjs`, driven by `node`, and emits
   `scripts/smoke_test.mjs`.
-- Decision: add the two missing scripts (`lint` -> `vp lint`,
-  `validate` -> `node scripts/validate-cli.js`) and exclude generated
-  `dist/` from lint so the new gate stays signal-only. Delete the
+- Decision: add the three missing scripts (`lint` -> `vp lint`,
+  `validate` -> `node scripts/validate-cli.js`, `test:coverage` ->
+  `vitest run --coverage`), exclude generated `dist/` from lint so the
+  new gate stays signal-only, and reword the `AGENTS.md` harness line to
+  say "coverage report" rather than "coverage gate", since vitest
+  enforces no threshold. Delete the
   three POSIX-only duplicates that nothing here invokes or tests:
   `safety_guard.sh` and `verify_completion.sh` (the `.js` twins are
   what `hooks.json` runs) and `validate_agentic_configs.sh`
