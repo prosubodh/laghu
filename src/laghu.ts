@@ -382,8 +382,18 @@ export const Laghu: LaghuAPI = (() => {
     }
     if (!(head in Object(scope))) {
       // Track the miss so late-added keys (framework $error, user keys
-      // declared after first render) still wake this reader up.
-      if (typeof head === "string" && isObj(scope)) track(scope, head);
+      // declared after first render) still wake this reader up. A read on
+      // a child scope (route params, data-for rows) is a plain object that
+      // never triggers, so also subscribe on each reactive scope up the
+      // chain: the key lands on that ancestor, whose proxy triggers.
+      if (typeof head === "string" && isObj(scope)) {
+        track(scope, head);
+        var node = Object.getPrototypeOf(scope);
+        while (node && node !== Object.prototype) {
+          if (proxySet.has(node)) track(node, head);
+          node = Object.getPrototypeOf(node);
+        }
+      }
       return undefined;
     }
     var cur = scope[head];

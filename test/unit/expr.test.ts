@@ -99,4 +99,20 @@ describe("get/set paths", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(seen).toBe("now");
   });
+
+  it("missed reads on a child scope subscribe the reactive ancestor", async () => {
+    // Route params and data-for rows hydrate against a child scope, so a
+    // miss must also subscribe on the reactive parent up the chain.
+    const parent = Laghu.reactive({} as any);
+    const child = Laghu.scope(parent, { params: {} });
+    let seen: any = "empty";
+    Laghu.effect(() => {
+      seen = Laghu.get(child, "future") ?? "empty";
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(seen).toBe("empty");
+    parent.future = "now";
+    await new Promise((r) => setTimeout(r, 10));
+    expect(seen).toBe("now");
+  });
 });

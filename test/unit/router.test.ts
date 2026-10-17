@@ -181,4 +181,23 @@ describe("LaghuRouter declarative templates", () => {
     stop();
     window.location.hash = "#/";
   });
+
+  it("wakes a binding when the parent gains the key after first render", async () => {
+    (window as any).Laghu = Laghu;
+    document.body.innerHTML = `<div id="dl">
+      <template data-route="/"><span id="late" data-bind="lateCount"></span></template>
+    </div>`;
+    // Routes hydrate against a child scope (params live there), so the
+    // late key lands on the reactive parent, not on the hydrated scope.
+    const state = Laghu.reactive({} as any);
+    const stop = LaghuRouter.route({ target: "#dl", scope: state });
+    window.location.hash = "#/";
+    await tick(30);
+    expect(document.querySelector("#late")!.textContent).toBe("");
+    state.lateCount = "132";
+    await tick(30);
+    expect(document.querySelector("#late")!.textContent).toBe("132");
+    stop();
+    window.location.hash = "#/";
+  });
 });

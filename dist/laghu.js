@@ -170,7 +170,14 @@
         return cur2;
       }
       if (!(head in Object(scope))) {
-        if (typeof head === "string" && isObj(scope)) track(scope, head);
+        if (typeof head === "string" && isObj(scope)) {
+          track(scope, head);
+          var node = Object.getPrototypeOf(scope);
+          while (node && node !== Object.prototype) {
+            if (proxySet.has(node)) track(node, head);
+            node = Object.getPrototypeOf(node);
+          }
+        }
         return void 0;
       }
       var cur = scope[head];
