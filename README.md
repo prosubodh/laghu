@@ -402,10 +402,38 @@ For pages with a handful of views, load `router.min.js` after the
 core and declare hash routes. Past about five guarded routes, use
 a real router; this one stays small on purpose.
 
+Write routes as templates inside the target, so the markup stays in
+HTML where editors, linters and accessibility tooling can see it.
+Params bind into a child scope as `params`, guards are plain
+expressions, and templates are harvested once at setup so swaps
+never destroy them:
+
 ```html
 <script src="laghu.min.js"></script>
 <script src="router.min.js"></script>
-<div id="view"></div>
+<div id="view">
+  <template data-route="/"><h1>Home</h1></template>
+  <template data-route="/user/:id" data-route-if="isAdmin">
+    <h1>User <span data-bind="params.id"></span></h1>
+  </template>
+  <template data-route-notfound><h1>Missing</h1></template>
+</div>
+<script>
+  LaghuRouter.route({ target: "#view", scope: state });
+</script>
+```
+
+Links are plain anchors (`href="#/user/42"`); hash changes drive
+swaps, params decode automatically, guards cancel by returning
+false, and fragments hydrate with the scope and actions you pass in
+(pass `actions` to use `data-click` / `data-on:*` inside a template).
+
+Programmatic alternative for computed views: when a page is
+genuinely generated (a table built from non-HTML data, say), pass
+`render` functions instead. Each receives the parsed params, and
+its returned fragment hydrates through the same pipeline:
+
+```html
 <script>
   LaghuRouter.route({
     target: "#view",
@@ -435,28 +463,8 @@ a real router; this one stays small on purpose.
 </script>
 ```
 
-Links are plain anchors (`href="#/user/42"`); hash changes drive
-renders, params decode automatically, guards cancel by returning
-false, and rendered fragments hydrate with the scope and actions
-you pass in.
-
-Declarative alternative: skip render functions and write routes as
-templates inside the target. Params bind into a child scope as
-`params`, guards are plain expressions, and templates are
-harvested once at setup so swaps never destroy them:
-
-```html
-<div id="view">
-  <template data-route="/"><h1>Home</h1></template>
-  <template data-route="/user/:id" data-route-if="isAdmin">
-    <h1>User <span data-bind="params.id"></span></h1>
-  </template>
-  <template data-route-notfound><h1>Missing</h1></template>
-</div>
-<script>
-  LaghuRouter.route({ target: "#view", scope: state });
-</script>
-```
+Prefer templates for markup a human maintains; reach for `render`
+only when the markup is computed.
 
 ### data-trigger
 

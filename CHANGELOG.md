@@ -37,6 +37,12 @@ Toolchain (no library behavior change):
   inert POSIX-only `.sh` scripts laghu dropped stay dropped
   (`memory.md` ADR-006).
 
+Docs:
+
+- The routing section of `README.md` now leads with declarative
+  `template[data-route]` markup; `render` functions are documented as
+  the computed-view escape hatch.
+
 ## [1.1.0]
 
 Security baseline (breaking only for attack patterns):
