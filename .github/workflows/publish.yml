@@ -174,3 +174,22 @@ jobs:
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-jsr:
+    name: Publish to JSR
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Trusted publishing over OIDC: no JSR token is stored in the repo.
+      # jsr.json carries the name, version, and export map.
+      - name: Publish to JSR
+        run: npx jsr publish

@@ -121,7 +121,7 @@ declare global {
 
 export const Laghu: LaghuAPI = (() => {
   "use strict";
-  var VERSION = "1.2.0";
+  var VERSION = "1.2.1";
   // Opt-in dev noise. Production stays silent unless handlers listen
   // for laghu:error / laghu:request-error, which always dispatch.
   var DEV = typeof window !== "undefined" && (window as any).__LAGHU_DEV__ === true;
@@ -832,6 +832,21 @@ export const Laghu: LaghuAPI = (() => {
     var fn = actions[name] || getPath(scope, name);
     if (typeof fn === "function") {
       fn.call(scope);
+      return;
+    }
+    // "name(a, b)": a component action called with arguments. evalExpr
+    // resolves call targets from the scope alone, so an action living only
+    // in `actions` would be invisible there. Match the bare-name path
+    // instead (which also prefers actions) and keep `this` as the scope.
+    var call = s.match(/^([\w.$]+)\s*\(([\s\S]*)\)$/);
+    if (call && typeof actions[call[1]] === "function") {
+      var inner = call[2].trim();
+      var callArgs = inner
+        ? splitTop(inner, ",").map(function (a: string) {
+            return evalExpr(scope, a);
+          })
+        : [];
+      (actions[call[1]] as Function).apply(scope, callArgs);
       return;
     }
     if (/^[A-Za-z_$][\w.$-]*$/.test(s)) {

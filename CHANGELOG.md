@@ -6,6 +6,21 @@ major for breaking changes.
 
 ## [Unreleased]
 
+## [1.2.1]
+
+Reactivity fixes for state that appears after the first render:
+
+- Bindings hydrated against a child scope (declarative route templates,
+  `data-for` rows) now wake when a missed key is added later on the
+  reactive ancestor. Previously such a `data-bind` silently stayed
+  empty, so values computed during a later fetch (a formatted result
+  count, for example) never appeared.
+- `data-click` / `data-on` actions called with arguments, such as
+  `data-click="switchTab('prs')"`, now reach the component's actions.
+  Argument calls were resolved from the scope alone, so an action
+  living only in the `actions` map was reported as unknown and never
+  ran.
+
 ## [1.2.0]
 
 Declarative push:

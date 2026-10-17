@@ -243,6 +243,27 @@ describe("data-click and data-on", () => {
     expect(hits).toBe(1);
   });
 
+  it("calls component actions with arguments", async () => {
+    const seen: Array<[string, any]> = [];
+    const s = island(
+      `<button id="one" data-click="pick('one', 1)">1</button>
+       <button id="two" data-click="pick('two', 2)">2</button>`,
+      { n: 5 },
+      {
+        pick(this: any, name: string, num: number) {
+          // `this` must stay the scope so actions can read/mutate state.
+          seen.push([name, num + this.n]);
+        },
+      },
+    );
+    (document.querySelector("#one") as HTMLElement).click();
+    (document.querySelector("#two") as HTMLElement).click();
+    expect(seen).toEqual([
+      ["one", 6],
+      ["two", 7],
+    ]);
+  });
+
   it("supports once and event modifiers", async () => {
     const s = island(
       `<button id="o" data-click="n++" data-trigger="click once">o</button>

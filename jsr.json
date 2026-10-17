@@ -1,0 +1,14 @@
+{
+  "name": "@prosubodh/laghu",
+  "version": "1.2.1",
+  "description": "Zero-build drop-in micro-framework: Light-DOM Web Components + Proxy reactivity + JSON-into-state fetch",
+  "exports": {
+    ".": "./src/laghu.ts",
+    "./router": "./src/router.ts",
+    "./morph": "./src/morph.ts",
+    "./validate": "./src/validate.ts"
+  },
+  "publish": {
+    "include": ["src", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md"]
+  }
+}

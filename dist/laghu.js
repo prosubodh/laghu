@@ -3,7 +3,7 @@
   // src/laghu.ts
   var Laghu = (() => {
     "use strict";
-    var VERSION = "1.2.0";
+    var VERSION = "1.2.1";
     var DEV = typeof window !== "undefined" && window.__LAGHU_DEV__ === true;
     var stores = /* @__PURE__ */ new Map();
     var directives = /* @__PURE__ */ new Map();
@@ -509,6 +509,15 @@
       var fn = actions[name] || getPath(scope, name);
       if (typeof fn === "function") {
         fn.call(scope);
+        return;
+      }
+      var call = s.match(/^([\w.$]+)\s*\(([\s\S]*)\)$/);
+      if (call && typeof actions[call[1]] === "function") {
+        var inner = call[2].trim();
+        var callArgs = inner ? splitTop(inner, ",").map(function(a) {
+          return evalExpr(scope, a);
+        }) : [];
+        actions[call[1]].apply(scope, callArgs);
         return;
       }
       if (/^[A-Za-z_$][\w.$-]*$/.test(s)) {
